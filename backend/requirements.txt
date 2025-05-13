@@ -1,0 +1,6 @@
+pymongo
+playwright
+python-dotenv
+fastapi
+uvicorn
+pydantic

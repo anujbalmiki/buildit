@@ -1,9 +1,7 @@
-import asyncio
-import os
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
+import requests
 import streamlit as st
 from bson.objectid import ObjectId
 from playwright.sync_api import sync_playwright
@@ -130,30 +128,6 @@ SECTION_TEMPLATES = {
     """
 }
 
-import json
-import os
-import subprocess
-import tempfile
-
-
-def generate_pdf(html_content, output_path):
-    # Create a temporary file to pass the HTML content
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
-        f.write(html_content)
-        html_path = f.name
-    
-    # Call the external PDF generator
-    try:
-        subprocess.run([
-            "python", 
-            "pdf_generator.py",
-            html_path,
-            output_path
-        ], check=True)
-    finally:
-        # Clean up the temporary file
-        os.unlink(html_path)
-
 def get_section_content(section_type, section_data):
     if section_type == "paragraph":
         return SECTION_TEMPLATES["paragraph"].format(
@@ -234,7 +208,7 @@ def main():
         st.session_state.resume_data["title"] = st.text_input("Professional Title", st.session_state.resume_data["title"])
     
     st.session_state.resume_data["contact_info"] = st.text_area("Contact Information (separate items with '|')", 
-                                                              st.session_state.resume_data["contact_info"])
+    st.session_state.resume_data["contact_info"])
 
     # Formatting Options
     st.header("Formatting Options")
@@ -366,20 +340,19 @@ def main():
             **st.session_state.resume_data["formatting"]
         )
         
-        # Generate PDF
+        # Call FastAPI backend to generate PDF
         with st.spinner("Generating PDF..."):
-            pdf_path = "resume.pdf"
-            generate_pdf(html_content, pdf_path)  # Direct call now
-            
-            with open(pdf_path, "rb") as f:
+            api_url = "http://127.0.0.1:8000/generate-pdf"  # Change to your deployed FastAPI URL
+            response = requests.post(api_url, json={"html": html_content})
+            if response.status_code == 200:
                 st.download_button(
                     label="Download PDF",
-                    data=f,
+                    data=response.content,
                     file_name=f"{st.session_state.resume_data['name'].replace(' ', '_')}_Resume.pdf",
                     mime="application/pdf"
                 )
-            
-            os.remove(pdf_path)
+            else:
+                st.error("Failed to generate PDF. Please try again.")
 
 if __name__ == "__main__":
     main()
