@@ -4,7 +4,6 @@ from pathlib import Path
 import requests
 import streamlit as st
 from bson.objectid import ObjectId
-from playwright.sync_api import sync_playwright
 from pymongo import MongoClient
 
 
