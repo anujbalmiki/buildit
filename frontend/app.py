@@ -18,101 +18,101 @@ resumes = db.resumes  # This uses your 'resumes' collection
 
 # Resume template (based on your HTML)
 RESUME_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{name} - {title} Resume</title>
-    <style>
-        body {{
-            font-family: Arial, sans-serif;
-            line-height: 1.3;
-            color: #000;
-            padding: 0;
-            margin: 0;
-        }}
-
-        .resume-container {{
-            max-width: 800px;
-            margin: auto;
-            padding: 25px;
-            border: none;
-        }}
-
-        h1, h2 {{
-            text-align: {name_alignment};
-            margin-bottom: 5px;
-        }}
-
-        h1 {{
-            font-size: 24px;
-            font-weight: {name_weight};
-        }}
-
-        h2 {{
-            font-size: 16px;
-            font-weight: normal;
-        }}
-
-        .section-title {{
-            font-weight: bold;
-            margin-top: 20px;
-            border-bottom: 1px solid #000;
-            padding-bottom: 3px;
-            text-align: {section_title_alignment};
-        }}
-
-        ul {{
-            margin: 0;
-            padding-left: 20px;
-        }}
-
-        p {{
-            margin: 6px 0;
-            text-align: {paragraph_alignment};
-        }}
-
-        .contact {{
-            text-align: center;
-            font-size: 14px;
-        }}
-
-        .skills, .certifications {{
-            padding-top: 10px;
-        }}
-
-        a {{
-            color: #000;
-            text-decoration: none;
-        }}
-
-        @media print {{
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{name} - {title} Resume</title>
+        <style>
             body {{
+                font-family: Arial, sans-serif;
+                line-height: 1.3;
+                color: #000;
                 padding: 0;
                 margin: 0;
             }}
 
             .resume-container {{
-                padding: 20px;
-                max-width: 100%;
+                max-width: 800px;
+                margin: auto;
+                padding: 25px;
+                border: none;
             }}
-        }}
-    </style>
-</head>
-<body>
-    <div class="resume-container">
-        <h1>{name}</h1>
-        <h2>{title}</h2>
-        <div class="contact">
-            {contact_info}
-        </div>
 
-        {sections}
-    </div>
-</body>
-</html>
-"""
+            h1, h2 {{
+                text-align: {name_alignment};
+                margin-bottom: 5px;
+            }}
+
+            h1 {{
+                font-size: 24px;
+                font-weight: {name_weight};
+            }}
+
+            h2 {{
+                font-size: 16px;
+                font-weight: normal;
+            }}
+
+            .section-title {{
+                font-weight: bold;
+                margin-top: 20px;
+                border-bottom: 1px solid #000;
+                padding-bottom: 3px;
+                text-align: {section_title_alignment};
+            }}
+
+            ul {{
+                margin: 0;
+                padding-left: 20px;
+            }}
+
+            p {{
+                margin: 6px 0;
+                text-align: {paragraph_alignment};
+            }}
+
+            .contact {{
+                text-align: center;
+                font-size: 14px;
+            }}
+
+            .skills, .certifications {{
+                padding-top: 10px;
+            }}
+
+            a {{
+                color: #000;
+                text-decoration: none;
+            }}
+
+            @media print {{
+                body {{
+                    padding: 0;
+                    margin: 0;
+                }}
+
+                .resume-container {{
+                    padding: 20px;
+                    max-width: 100%;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="resume-container">
+            <h1>{name}</h1>
+            <h2>{title}</h2>
+            <div class="contact">
+                {contact_info}
+            </div>
+
+            {sections}
+        </div>
+    </body>
+    </html>
+    """
 
 SECTION_TEMPLATES = {
     "paragraph": "<div class='section-title'>{title}</div><p>{content}</p>",
