@@ -341,7 +341,7 @@ def main():
         
         # Call FastAPI backend to generate PDF
         with st.spinner("Generating PDF..."):
-            api_url = "http://127.0.0.1:8000/generate-pdf"  # Change to your deployed FastAPI URL
+            api_url = "https://buildit-fg51.onrender.com/generate-pdf"  # Change to your deployed FastAPI URL
             response = requests.post(api_url, json={"html": html_content})
             if response.status_code == 200:
                 st.download_button(
