@@ -1,20 +1,24 @@
 import base64
 import os
+import platform
 import sys
 import tempfile
 import time
 from io import BytesIO
 
-from fastapi import FastAPI, Response
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
-import platform
 import psutil
-
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
+from google import genai
+from pydantic import BaseModel
 # Import WeasyPrint instead of Playwright
-from weasyprint import HTML, CSS
+from weasyprint import CSS, HTML
+
+load_dotenv()
+
+api_key = os.environ["GOOGLE_API_KEY"]
 
 app = FastAPI()
 
@@ -35,6 +39,11 @@ class PDFRequest(BaseModel):
     page_size: str = "A4"
     zoom: float = 1.0
     spacing: float = 1.0  # Line spacing multiplier
+
+@app.get("/wake")
+async def wake():
+    """Wake up the server (for Streamlit Cloud)"""
+    return JSONResponse(content={"message": "Server is awake!"})
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -95,6 +104,7 @@ async def root():
                 <li><a href="/health">/health</a> - API health check</li>
                 <li><a href="/info">/info</a> - API information</li>
                 <li><a href="/generate-pdf">/generate-pdf</a> - Generate PDF from HTML</li>
+                <li><a href="/parse-resume-ai">/parse-resume-ai</a> - Parse resume using AI</li>
             </ul>
         </div>
     </body>
@@ -182,3 +192,80 @@ def generate_pdf_endpoint(req: PDFRequest):
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
     finally:
         pdf_buffer.close()
+
+def extract_text_from_file(file: UploadFile):
+    ext = file.filename.split('.')[-1].lower()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
+        tmp.write(file.file.read())
+        tmp_path = tmp.name
+    text = ""
+    if ext == "pdf":
+        from pdfminer.high_level import extract_text
+        text = extract_text(tmp_path)
+    elif ext == "docx":
+        import docx2txt
+        text = docx2txt.process(tmp_path)
+    os.remove(tmp_path)
+    return text
+
+@app.post("/parse-resume-ai")
+async def parse_resume_ai(file: UploadFile = File(...)):
+    print(file)
+    text = extract_text_from_file(file)
+    if not text.strip():
+        return JSONResponse(content={"error": "Could not extract text from file."}, status_code=400)
+    client = genai.Client(api_key=api_key)  # Or use your config
+    prompt = (
+        "Extract the following information from this resume: "
+        "name, email, phone, education, experience (with company, position, dates, bullet points), and skills. "
+        "Return ONLY a valid JSON object, with NO markdown, no code block, and no explanation. Resume text:\n\n" + text
+    )
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+    )
+    import json
+    import re
+    raw = response.text.strip()
+    # Remove markdown code block if present
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw)
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return JSONResponse(content={"error": "AI response could not be parsed as JSON.", "raw": response.text}, status_code=400)
+
+    # --- Normalize and refine the output ---
+    refined = {
+        "name": data.get("name", ""),
+        "email": data.get("email", ""),
+        "phone": data.get("phone", ""),
+        "skills": data.get("skills", []),
+        "education": [],
+        "experience": []
+    }
+
+    # Normalize education
+    for edu in data.get("education", []):
+        refined["education"].append({
+            "degree": edu.get("degree", ""),
+            "institution": edu.get("institution", ""),
+            "dates": edu.get("dates", ""),
+            "details": edu.get("details", "")
+        })
+
+    # Normalize experience
+    for exp in data.get("experience", []):
+        refined["experience"].append({
+            "company": exp.get("company", ""),
+            "position": exp.get("position", ""),
+            "date_range": exp.get("dates", ""),
+            "bullet_points": exp.get("bullet_points", []) or exp.get("bullets", [])
+        })
+
+    # Optionally, add a summary field if present
+    if "summary" in data:
+        refined["summary"] = data["summary"]
+
+    return refined

@@ -1,3 +1,4 @@
+import calendar
 from datetime import datetime
 from pathlib import Path
 
@@ -7,6 +8,17 @@ from bson.objectid import ObjectId
 from pymongo import MongoClient
 
 
+# Wake up the backend server
+@st.cache_resource
+def wake_backend():
+    try:
+        api_url = st.secrets["backend"]["url"] + "/wake"
+        response = requests.get(api_url, timeout=3)
+    except Exception:
+        pass
+
+wake_backend()
+    
 # MongoDB connection
 @st.cache_resource
 def init_connection():
@@ -146,26 +158,39 @@ SECTION_TEMPLATES = {
 }
 
 def get_section_content(section_type, section_data):
-    style = f"text-align:{section_data['formatting'].get('alignment', 'left')};" \
-            f"font-size:{section_data['formatting'].get('font_size', 14)}px;" \
-            f"font-weight:{section_data['formatting'].get('font_weight', 'normal')};"
+    title_style = (
+        f"text-align:{section_data['title_formatting'].get('alignment', 'left')};"
+        f"font-size:{section_data['title_formatting'].get('font_size', 16)}px;"
+        f"font-weight:{section_data['title_formatting'].get('font_weight', 'bold')};"
+    )
+    content_style = (
+        f"text-align:{section_data['content_formatting'].get('alignment', 'left')};"
+        f"font-size:{section_data['content_formatting'].get('font_size', 14)}px;"
+        f"font-weight:{section_data['content_formatting'].get('font_weight', 'normal')};"
+    )
     if section_type == "paragraph":
-        return f"<div class='section-title' style='{style}'>{section_data['title']}</div><p style='{style}'>{section_data['content']}</p>"
+        return (
+            f"<div class='section-title' style='{title_style}'>{section_data['title']}</div>"
+            f"<p style='{content_style}'>{section_data['content']}</p>"
+        )
     elif section_type == "bullet_points":
-        items = "".join(f"<li style='{style}'>{item}</li>" for item in section_data["items"])
-        return f"<div class='section-title' style='{style}'>{section_data['title']}</div><ul>{items}</ul>"
+        items = "".join(f"<li style='{content_style}'>{item}</li>" for item in section_data["items"])
+        return (
+            f"<div class='section-title' style='{title_style}'>{section_data['title']}</div>"
+            f"<ul>{items}</ul>"
+        )
     elif section_type == "experience":
         items = ""
         for exp in section_data["items"]:
             bullets = "".join(
-                f'<li style="{style}">{bullet}</li>' for bullet in exp["bullet_points"]
+                f'<li style="{content_style}">{bullet}</li>' for bullet in exp["bullet_points"]
             )
             items += (
-                f'<p style="{style}"><strong>{exp["position"]}</strong>, {exp["company"]} '
+                f'<p style="{content_style}"><strong>{exp["position"]}</strong>, {exp["company"]} '
                 f'<span style="float:right;">{exp["date_range"]}</span></p>'
                 f"<ul>{bullets}</ul>"
             )
-        return f'<div class="section-title" style="{style}">{section_data["title"]}</div>{items}'
+        return f'<div class="section-title" style="{title_style}">{section_data["title"]}</div>{items}'
     return ""
 
 def load_resume(email):
@@ -175,11 +200,15 @@ def load_resume(email):
     return None
 
 def save_resume(email, resume_data):
+    resume_data = dict(resume_data)  # Make a copy to avoid mutating session state
     resume_data["last_updated"] = datetime.now()
+    resume_data["email"] = email  # Ensure email is always present
+    if "_id" in resume_data:
+        del resume_data["_id"]  # Remove MongoDB's _id field before upsert
     resumes.update_one(
-        {"email": email},
-        {"$set": resume_data},
-        upsert=True
+        {"email": email},         # Use email as the unique key
+        {"$set": resume_data},    # Set all fields from resume_data
+        upsert=True               # Insert if not exists, update if exists
     )
 
 def main():
@@ -219,6 +248,58 @@ def main():
             else:
                 st.warning("No resume found for this email")
 
+    # Upload & Autofill from Existing Resume
+    st.header("Upload & Autofill from Existing Resume")
+    uploaded_file = st.file_uploader("Upload your resume (PDF or DOCX)", type=["pdf", "docx"])
+    if uploaded_file:
+        with st.spinner("Parsing your resume..."):
+            api_url = st.secrets["backend"]["url"] + "/parse-resume-ai"
+            files = {"file": (uploaded_file.name, uploaded_file.getvalue())}
+            response = requests.post(api_url, files=files)
+            print(response.status_code, response.text)
+            if response.status_code == 200:
+                parsed = response.json()
+                # --- Autofill logic ---
+                # Basic info
+                st.session_state.resume_data["name"] = parsed.get("name", "")
+                st.session_state.resume_data["contact_info"] = " | ".join(
+                    filter(None, [parsed.get("email", ""), parsed.get("phone", "")])
+                )
+                # Skills section (if you have one)
+                for section in st.session_state.resume_data["sections"]:
+                    if section["type"] == "bullet_points" and "skills" in section.get("title", "").lower():
+                        section["items"] = parsed.get("skills", [])
+                # Education section
+                for section in st.session_state.resume_data["sections"]:
+                    if section["type"] == "paragraph" and "education" in section.get("title", "").lower():
+                        edu_str = "\n".join(
+                            f"{e.get('degree', '')}, {e.get('institution', '')} ({e.get('dates', '')}) {e.get('details', '')}"
+                            for e in parsed.get("education", [])
+                        )
+                        section["content"] = edu_str
+                # Experience section
+                for section in st.session_state.resume_data["sections"]:
+                    if section["type"] == "experience":
+                        section["items"] = []
+                        for exp in parsed.get("experience", []):
+                            section["items"].append({
+                                "position": exp.get("position", ""),
+                                "company": exp.get("company", ""),
+                                "date_range": exp.get("date_range", ""),
+                                "bullet_points": exp.get("bullet_points", []),
+                                "formatting": {
+                                    "alignment": "left",
+                                    "font_size": 14,
+                                    "font_weight": "normal"
+                                }
+                            })
+                # Optionally, handle summary
+                if parsed.get("summary"):
+                    st.session_state.resume_data["summary"] = parsed["summary"]
+                st.success("Resume parsed and autofilled! Please review and edit as needed.")
+            else:
+                st.error("Failed to parse resume. Please check your file format.")
+
     # Basic Info
     st.header("Basic Information")
     col1, col2 = st.columns(2)
@@ -250,7 +331,12 @@ def main():
             "type": section_types[new_section_type],
             "title": "",
             "content": "",
-            "formatting": {
+            "title_formatting": {
+                "alignment": "left",
+                "font_size": 16,
+                "font_weight": "bold"
+            },
+            "content_formatting": {
                 "alignment": "left",
                 "font_size": 14,
                 "font_weight": "normal"
@@ -275,41 +361,12 @@ def main():
     # Edit existing sections
     for i, section in enumerate(st.session_state.resume_data["sections"]):
         # Ensure formatting exists for each section
-        if "formatting" not in section:
-            section["formatting"] = {
-                "alignment": "left",
-                "font_size": 14,
-                "font_weight": "normal"
-            }
-        else:
-            # Ensure all formatting keys exist
-            section["formatting"].setdefault("alignment", "left")
-            section["formatting"].setdefault("font_size", 14)
-            section["formatting"].setdefault("font_weight", "normal")
+        section.setdefault("title_formatting", {"alignment": "left", "font_size": 16, "font_weight": "bold"})
+        section.setdefault("content_formatting", {"alignment": "left", "font_size": 14, "font_weight": "normal"})
 
+        # Main section expander
         with st.expander(f"Section: {section.get('title', 'Untitled')}", expanded=True):
             section["title"] = st.text_input(f"Section Title {i+1}", section.get("title", ""), key=f"title_{i}")
-
-            # Section formatting controls
-            st.markdown("**Section Formatting**")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                section["formatting"]["alignment"] = st.selectbox(
-                    "Alignment", ["left", "center", "right", "justify"],
-                    index=["left", "center", "right", "justify"].index(section["formatting"].get("alignment", "left")),
-                    key=f"align_{i}"
-                )
-            with col2:
-                section["formatting"]["font_size"] = st.number_input(
-                    "Font Size", min_value=10, max_value=32, value=section["formatting"].get("font_size", 14),
-                    key=f"fontsize_{i}"
-                )
-            with col3:
-                section["formatting"]["font_weight"] = st.selectbox(
-                    "Font Weight", ["normal", "bold", "bolder"],
-                    index=["normal", "bold", "bolder"].index(section["formatting"].get("font_weight", "normal")),
-                    key=f"fontweight_{i}"
-                )
 
             if section["type"] == "paragraph":
                 section["content"] = st.text_area(f"Content {i+1}", section.get("content", ""), key=f"content_{i}")
@@ -341,8 +398,55 @@ def main():
                     with col1:
                         exp["company"] = st.text_input(f"Company {j+1}", exp.get("company", ""), key=f"company_{i}_{j}")
                     with col2:
-                        exp["date_range"] = st.text_input(f"Date Range {j+1}", exp.get("date_range", ""), key=f"date_{i}_{j}")
-                    
+                        # --- Month/Year Chooser ---
+                        months = list(calendar.month_name)[1:]  # ['January', ..., 'December']
+                        existing_range = exp.get("date_range", "")
+                        # Default values
+                        start_month, start_year = months[0], datetime.now().year
+                        end_month, end_year = "", ""
+                        end_type = "Present"
+
+                        try:
+                            if existing_range:
+                                parts = existing_range.split(" - ")
+                                # Parse start
+                                if len(parts) > 0:
+                                    sm, sy = parts[0].rsplit(" ", 1)
+                                    if sm in months and sy.isdigit():
+                                        start_month, start_year = sm, int(sy)
+                                # Parse end
+                                if len(parts) > 1:
+                                    if parts[1] == "Present":
+                                        end_type = "Present"
+                                        end_month, end_year = "", ""
+                                    else:
+                                        em, ey = parts[1].rsplit(" ", 1)
+                                        if em in months and ey.isdigit():
+                                            end_type = "Specific Month"
+                                            end_month, end_year = em, int(ey)
+                        except Exception:
+                            pass
+
+                        start_month = st.selectbox(
+                            f"Start Month {j+1}", months, index=months.index(start_month), key=f"start_month_{i}_{j}"
+                        )
+                        start_year = st.number_input(
+                            f"Start Year {j+1}", min_value=1950, max_value=2100, value=start_year, key=f"start_year_{i}_{j}"
+                        )
+                        end_type = st.radio(
+                            f"End Date Type {j+1}", ["Present", "Specific Month"], index=0 if end_type == "Present" else 1, key=f"end_type_{i}_{j}"
+                        )
+                        if end_type == "Specific Month":
+                            end_month = st.selectbox(
+                                f"End Month {j+1}", months, index=months.index(end_month) if end_month in months else 0, key=f"end_month_{i}_{j}"
+                            )
+                            end_year = st.number_input(
+                                f"End Year {j+1}", min_value=1950, max_value=2100, value=end_year if isinstance(end_year, int) else datetime.now().year, key=f"end_year_{i}_{j}"
+                            )
+                            exp["date_range"] = f"{start_month} {start_year} - {end_month} {end_year}"
+                        else:
+                            exp["date_range"] = f"{start_month} {start_year} - Present"
+
                     st.write("Bullet Points:")
                     for k, bullet in enumerate(exp["bullet_points"]):
                         col1, col2 = st.columns([0.9, 0.1])
@@ -366,6 +470,48 @@ def main():
             if st.button("❌ Remove Section", key=f"remove_section_{i}"):
                 st.session_state.resume_data["sections"].pop(i)
                 st.rerun()
+
+        # Section Formatting expander (NOT nested)
+        with st.expander(f"Section Formatting: {section.get('title', 'Untitled')}", expanded=False):
+            st.markdown("**Section Title Formatting**")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                section["title_formatting"]["alignment"] = st.selectbox(
+                    "Title Alignment", ["left", "center", "right"],
+                    index=["left", "center", "right"].index(section["title_formatting"].get("alignment", "left")),
+                    key=f"title_align_{i}"
+                )
+            with col2:
+                section["title_formatting"]["font_size"] = st.number_input(
+                    "Title Font Size", min_value=10, max_value=32, value=section["title_formatting"].get("font_size", 16),
+                    key=f"title_fontsize_{i}"
+                )
+            with col3:
+                section["title_formatting"]["font_weight"] = st.selectbox(
+                    "Title Font Weight", ["normal", "bold", "bolder"],
+                    index=["normal", "bold", "bolder"].index(section["title_formatting"].get("font_weight", "bold")),
+                    key=f"title_fontweight_{i}"
+                )
+
+            st.markdown("**Section Content Formatting**")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                section["content_formatting"]["alignment"] = st.selectbox(
+                    "Content Alignment", ["left", "center", "right", "justify"],
+                    index=["left", "center", "right", "justify"].index(section["content_formatting"].get("alignment", "left")),
+                    key=f"content_align_{i}"
+                )
+            with col2:
+                section["content_formatting"]["font_size"] = st.number_input(
+                    "Content Font Size", min_value=10, max_value=32, value=section["content_formatting"].get("font_size", 14),
+                    key=f"content_fontsize_{i}"
+                )
+            with col3:
+                section["content_formatting"]["font_weight"] = st.selectbox(
+                    "Content Font Weight", ["normal", "bold", "bolder"],
+                    index=["normal", "bold", "bolder"].index(section["content_formatting"].get("font_weight", "normal")),
+                    key=f"content_fontweight_{i}"
+                )
 
     # Live Preview
     st.header("Live Resume Preview")
