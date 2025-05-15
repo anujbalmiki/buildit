@@ -501,7 +501,7 @@ def main():
         
         # Call FastAPI backend to generate PDF with custom settings
         with st.spinner("Generating PDF..."):
-            api_url = "http://127.0.0.1:8000/generate-pdf"  # Change to your deployed FastAPI URL
+            api_url = st.secrets["backend"]["url"] + "/generate-pdf"  # Use the secret for the API URL
             
             # Prepare the request with PDF settings
             pdf_request = {
