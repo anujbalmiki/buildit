@@ -1,21 +1,20 @@
-import asyncio
 import base64
 import os
 import sys
 import tempfile
+import time
+from io import BytesIO
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from playwright.sync_api import sync_playwright
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 import platform
-import time
 import psutil
 
-if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+# Import WeasyPrint instead of Playwright
+from weasyprint import HTML, CSS
 
 app = FastAPI()
 
@@ -30,6 +29,12 @@ app.add_middleware(
 
 class PDFRequest(BaseModel):
     html: str
+    # PDF customization options
+    margins: dict = {"top": "20mm", "right": "20mm", "bottom": "20mm", "left": "20mm"}
+    scale: float = 1.0
+    page_size: str = "A4"
+    zoom: float = 1.0
+    spacing: float = 1.0  # Line spacing multiplier
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -141,31 +146,39 @@ async def api_info():
                 "platform": platform.platform(),
             }
         }
-        
 
 @app.post("/generate-pdf")
 def generate_pdf_endpoint(req: PDFRequest):
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_pdf:
-        pdf_path = tmp_pdf.name
-
+    """Generate PDF from HTML content using WeasyPrint with customizable options"""
+    # Create a BytesIO buffer to store the PDF
+    pdf_buffer = BytesIO()
+    
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page()
-            html_base64 = base64.b64encode(req.html.encode('utf-8')).decode('utf-8')
-            data_url = f"data:text/html;base64,{html_base64}"
-            page.goto(data_url, wait_until='networkidle')
-            page.pdf(
-                path=pdf_path,
-                format='A4',
-                margin={'top': '20px', 'right': '30px', 'bottom': '20px', 'left': '30px'},
-                print_background=True,
-                scale=0.95
-            )
-            browser.close()
-        with open(pdf_path, "rb") as f:
-            pdf_bytes = f.read()
-        return Response(content=pdf_bytes, media_type="application/pdf")
+        custom_css = f"""
+        @page {{
+            size: {req.page_size};
+            margin: {req.margins.get("top", "20mm")} {req.margins.get("right", "20mm")} 
+                    {req.margins.get("bottom", "20mm")} {req.margins.get("left", "20mm")};
+        }}
+        body {{
+            zoom: {req.zoom};
+            line-height: {req.spacing};
+            transform: scale({req.scale});
+            transform-origin: top left;
+        }}
+        """
+        html = HTML(string=req.html)
+        html.write_pdf(
+            pdf_buffer,
+            presentational_hints=True,
+            stylesheets=[CSS(string=custom_css)],  # <-- Fix here
+        )
+        pdf_buffer.seek(0)
+        return Response(
+            content=pdf_buffer.getvalue(), 
+            media_type="application/pdf"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
     finally:
-        if os.path.exists(pdf_path):
-            os.remove(pdf_path)
+        pdf_buffer.close()
