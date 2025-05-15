@@ -1,25 +1,21 @@
-FROM python:3.11.9-slim-bookworm
+FROM python:3.13.3-slim-bookworm
 
 # Environment setup
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies required by Playwright
+# Install system dependencies required by WeasyPrint
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget curl gnupg2 ca-certificates fonts-liberation libappindicator3-1 libasound2 \
-    libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 libgdk-pixbuf2.0-0 \
-    libnspr4 libnss3 libxcomposite1 libxdamage1 libxrandr2 xdg-utils libgbm1 \
-    libgtk-3-0 libxshmfence1 libxss1 lsb-release && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    wget curl gnupg2 ca-certificates fonts-liberation \
+    libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf2.0-0 \
+    libffi-dev libxml2 libxslt1.1 libjpeg62-turbo \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY . .
 
 # Install Python dependencies
 RUN pip install --upgrade pip && pip install -r requirements.txt
-
-# Install Playwright and its browser binaries
-RUN playwright install --with-deps
 
 EXPOSE 8000
 
