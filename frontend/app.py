@@ -1,4 +1,5 @@
 import calendar
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -93,7 +94,7 @@ RESUME_TEMPLATE = """
             }}
 
             ul {{
-                margin: 0;
+                margin-top: 7px;
                 padding-left: 20px;
             }}
 
@@ -107,12 +108,8 @@ RESUME_TEMPLATE = """
                 font-size: 14px;
             }}
 
-            .skills, .certifications {{
-                padding-top: 10px;
-            }}
-
             a {{
-                color: #000;
+                color: inherit;
                 text-decoration: none;
             }}
 
@@ -155,6 +152,12 @@ SECTION_TEMPLATES = {
         <ul>{bullet_points}</ul>
     """
 }
+
+def make_links_clickable(text):
+    # Regex to find URLs
+    url_pattern = re.compile(r'(https?://[^\s|]+)')
+    # Replace URLs with anchor tags
+    return url_pattern.sub(r'<a href="\1">\1</a>', text)
 
 def get_section_content(section_type, section_data):
     title_style = (
@@ -233,10 +236,10 @@ def main():
                     "paragraph_alignment": "left"
                 })
                 rd.setdefault("pdf_settings", {
-                    "margins": {"top": "20mm", "right": "20mm", "bottom": "20mm", "left": "20mm"},
+                    "margins": {"top": "0mm", "right": "3mm", "bottom": "3mm", "left": "3mm"},
                     "scale": 1.0,
                     "page_size": "A4",
-                    "zoom": 1.0,
+                    "zoom": 1.15,
                     "spacing": 1.3
                 })
                 rd.setdefault("sections", [])
@@ -264,10 +267,10 @@ def main():
                     "paragraph_alignment": "left"
                 })
                 rd.setdefault("pdf_settings", {
-                    "margins": {"top": "20mm", "right": "20mm", "bottom": "20mm", "left": "20mm"},
+                    "margins": {"top": "0mm", "right": "3mm", "bottom": "3mm", "left": "3mm"},
                     "scale": 1.0,
                     "page_size": "A4",
-                    "zoom": 1.0,
+                    "zoom": 1.15,
                     "spacing": 1.3
                 })
                 rd.setdefault("sections", [])
@@ -511,10 +514,12 @@ def main():
         get_section_content(section["type"], section)
         for section in st.session_state.resume_data["sections"]
     )
+    contact_info_html = make_links_clickable(st.session_state.resume_data["contact_info"])
+
     html_content = RESUME_TEMPLATE.format(
         name=st.session_state.resume_data["name"],
         title=st.session_state.resume_data["title"],
-        contact_info=st.session_state.resume_data["contact_info"],
+        contact_info=contact_info_html,  # Use processed contact info
         sections=sections_html,
         **st.session_state.resume_data["formatting"]
     )
@@ -525,10 +530,10 @@ def main():
         st.subheader("PDF Layout Settings")
         if "pdf_settings" not in st.session_state.resume_data:
             st.session_state.resume_data["pdf_settings"] = {
-                "margins": {"top": "20mm", "right": "20mm", "bottom": "20mm", "left": "20mm"},
+                "margins": {"top": "0mm", "right": "3mm", "bottom": "3mm", "left": "3mm"},
                 "scale": 1.0,
                 "page_size": "A4",
-                "zoom": 1.0,
+                "zoom": 1.15,
                 "spacing": 1.3
             }
         st.session_state.resume_data["pdf_settings"]["page_size"] = st.selectbox(
@@ -628,11 +633,12 @@ def main():
             get_section_content(section["type"], section)
             for section in st.session_state.resume_data["sections"]
         )
-        
+        contact_info_html = make_links_clickable(st.session_state.resume_data["contact_info"])
+
         html_content = RESUME_TEMPLATE.format(
             name=st.session_state.resume_data["name"],
             title=st.session_state.resume_data["title"],
-            contact_info=st.session_state.resume_data["contact_info"],
+            contact_info=contact_info_html,  # Use processed contact info
             sections=sections_html,
             **st.session_state.resume_data["formatting"]
         )
