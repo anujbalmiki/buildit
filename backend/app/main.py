@@ -208,64 +208,116 @@ def extract_text_from_file(file: UploadFile):
     os.remove(tmp_path)
     return text
 
+def convert_flat_to_sections(parsed):
+    # Compose contact info
+    contact_info = " | ".join(filter(None, [parsed.get("email", ""), parsed.get("phone", "")]))
+    sections = []
+
+    # Skills
+    if parsed.get("skills"):
+        sections.append({
+            "type": "bullet_points",
+            "title": "Skills",
+            "items": parsed["skills"],
+            "title_formatting": {"alignment": "left", "font_size": 16, "font_weight": "bold"},
+            "content_formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}
+        })
+
+    # Education
+    if parsed.get("education"):
+        edu_items = []
+        for edu in parsed["education"]:
+            edu_str = ", ".join(filter(None, [edu.get("degree", ""), edu.get("institution", ""), edu.get("dates", "")]))
+            edu_items.append(edu_str)
+        sections.append({
+            "type": "bullet_points",
+            "title": "Education",
+            "items": edu_items,
+            "title_formatting": {"alignment": "left", "font_size": 16, "font_weight": "bold"},
+            "content_formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}
+        })
+
+    # Experience
+    if parsed.get("experience"):
+        exp_items = []
+        for exp in parsed["experience"]:
+            exp_items.append({
+                "position": exp.get("position", ""),
+                "company": exp.get("company", ""),
+                "date_range": exp.get("date_range", ""),
+                "bullet_points": exp.get("bullet_points", []),
+                "formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}
+            })
+        sections.append({
+            "type": "experience",
+            "title": "Experience",
+            "items": exp_items,
+            "title_formatting": {"alignment": "left", "font_size": 16, "font_weight": "bold"},
+            "content_formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}
+        })
+
+    return {
+        "name": parsed.get("name", "Full Name"),
+        "title": parsed.get("title", "Professional Title"),
+        "contact_info": contact_info,
+        "sections": sections
+    }
+
 @app.post("/parse-resume-ai")
 async def parse_resume_ai(file: UploadFile = File(...)):
-    print(file)
     text = extract_text_from_file(file)
     if not text.strip():
         return JSONResponse(content={"error": "Could not extract text from file."}, status_code=400)
     client = genai.Client(api_key=api_key)  # Or use your config
     prompt = (
-        "Extract the following information from this resume: "
-        "name, email, phone, education, experience (with company, position, dates, bullet points), and skills. "
-        "Return ONLY a valid JSON object, with NO markdown, no code block, and no explanation. Resume text:\n\n" + text
+        "You are an expert resume parser. Given the resume text below, extract all relevant information in structured JSON format as described:\n\n"
+        "{\n"
+        '  "name": "",\n'
+        '  "title": "",\n'
+        '  "contact_info": "",  // Combine all contact details and social links (phone, email, LinkedIn, location, etc.) and separate them with " | "\n'
+        '  "sections": [\n'
+        '    {\n'
+        '      "type": "paragraph" | "bullet_points" | "experience",\n'
+        '      "title": "",\n'
+        '      "content": "",           // for paragraph type only\n'
+        '      "items": [],             // for bullet_points or experience only\n'
+        '      "title_formatting": {"alignment": "left", "font_size": 16, "font_weight": "bold"},\n'
+        '      "content_formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}\n'
+        '    }\n'
+        '    // Additional sections detected from the resume\n'
+        '  ]\n'
+        "}\n\n"
+        "Strict Parsing Rules:\n"
+        "1. Do NOT repeat or duplicate sections. Each section should appear only once.\n"
+        "2. Use \"paragraph\" type when the section contains only a descriptive block of text. Put that in `content`, leave `items` empty.\n"
+        "3. Use \"bullet_points\" if the section is a list (e.g., skills, certifications). Put points in `items`, leave `content` empty.\n"
+        "4. Use \"experience\" for job history, projects, or certifications with multiple entries. Format each entry with:\n"
+        '     {\n'
+        '       "position": "",\n'
+        '       "company": "",\n'
+        '       "date_range": "",\n'
+        '       "bullet_points": []\n'
+        '     }\n'
+        "5. NEVER include empty sections. If a section has no `content` or `items`, do NOT include it at all.\n"
+        "6. If a section has content but no title, assign a suitable inferred title (e.g., 'Summary', 'Objective').\n"
+        "7. For the 'Skills' section:\n"
+        "   - If the skills are categorized, list them with one bullet per category.\n"
+        "   - If uncategorized, return them as a comma-separated string in the `content` field.\n"
+        "8. Do not fabricate or infer experience/project entries. Only include what is explicitly mentioned.\n"
+        "9. Maintain the natural order of content as it appears in the resume.\n"
+        "10. Contact info must be compact, clear, and separated using ' | '.\n\n"
+        "Input resume:\n" + text
     )
     response = client.models.generate_content(
         model="gemini-2.0-flash",
         contents=prompt,
     )
     import json
-    import re
     raw = response.text.strip()
-    # Remove markdown code block if present
-    if raw.startswith("```"):
-        raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
-        raw = re.sub(r"\n?```$", "", raw)
-    try:
-        data = json.loads(raw)
-    except Exception:
-        return JSONResponse(content={"error": "AI response could not be parsed as JSON.", "raw": response.text}, status_code=400)
-
-    # --- Normalize and refine the output ---
-    refined = {
-        "name": data.get("name", ""),
-        "email": data.get("email", ""),
-        "phone": data.get("phone", ""),
-        "skills": data.get("skills", []),
-        "education": [],
-        "experience": []
-    }
-
-    # Normalize education
-    for edu in data.get("education", []):
-        refined["education"].append({
-            "degree": edu.get("degree", ""),
-            "institution": edu.get("institution", ""),
-            "dates": edu.get("dates", ""),
-            "details": edu.get("details", "")
-        })
-
-    # Normalize experience
-    for exp in data.get("experience", []):
-        refined["experience"].append({
-            "company": exp.get("company", ""),
-            "position": exp.get("position", ""),
-            "date_range": exp.get("dates", ""),
-            "bullet_points": exp.get("bullet_points", []) or exp.get("bullets", [])
-        })
-
-    # Optionally, add a summary field if present
-    if "summary" in data:
-        refined["summary"] = data["summary"]
-
-    return refined
+    raw = raw[raw.index("{"):]  # Extract JSON part
+    # remove ``` from the end of the string
+    if raw.endswith("```"):
+        raw = raw[:-3]
+    print(raw)
+    data = json.loads(raw)
+    return data

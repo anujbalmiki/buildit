@@ -215,27 +215,9 @@ def main():
     st.title("Professional Resume Builder")
     st.write("Create an ATS-friendly resume with your preferred formatting")
 
-    # Initialize session state
+    # Initialize session state with safe defaults
     if 'resume_data' not in st.session_state:
-        st.session_state.resume_data = {
-            "name": "Full Name",
-            "title": "Professional Title",
-            "contact_info": "City, Country | Phone | email@example.com | linkedin.com/in/your-profile | github.com/yourusername",
-            "sections": [],
-            "formatting": {
-                "name_alignment": "center",
-                "name_weight": "bold",
-                "section_title_alignment": "center",
-                "paragraph_alignment": "left"
-            },
-            "pdf_settings": {
-                "margins": {"top": "20mm", "right": "20mm", "bottom": "20mm", "left": "20mm"},
-                "scale": 1.0,
-                "page_size": "A4",
-                "zoom": 1.0,
-                "spacing": 1.3
-            }
-        }
+        st.session_state.resume_data = {}
 
     # Load existing resume
     with st.expander("Load Existing Resume"):
@@ -244,6 +226,21 @@ def main():
             existing_resume = load_resume(email_to_load)
             if existing_resume:
                 st.session_state.resume_data = existing_resume
+                rd = st.session_state.resume_data
+                rd.setdefault("formatting", {
+                    "name_alignment": "center",
+                    "name_weight": "bold",
+                    "section_title_alignment": "center",
+                    "paragraph_alignment": "left"
+                })
+                rd.setdefault("pdf_settings", {
+                    "margins": {"top": "20mm", "right": "20mm", "bottom": "20mm", "left": "20mm"},
+                    "scale": 1.0,
+                    "page_size": "A4",
+                    "zoom": 1.0,
+                    "spacing": 1.3
+                })
+                rd.setdefault("sections", [])
                 st.success("Resume loaded successfully!")
             else:
                 st.warning("No resume found for this email")
@@ -256,46 +253,25 @@ def main():
             api_url = st.secrets["backend"]["url"] + "/parse-resume-ai"
             files = {"file": (uploaded_file.name, uploaded_file.getvalue())}
             response = requests.post(api_url, files=files)
-            print(response.status_code, response.text)
             if response.status_code == 200:
                 parsed = response.json()
-                # --- Autofill logic ---
-                # Basic info
-                st.session_state.resume_data["name"] = parsed.get("name", "")
-                st.session_state.resume_data["contact_info"] = " | ".join(
-                    filter(None, [parsed.get("email", ""), parsed.get("phone", "")])
-                )
-                # Skills section (if you have one)
-                for section in st.session_state.resume_data["sections"]:
-                    if section["type"] == "bullet_points" and "skills" in section.get("title", "").lower():
-                        section["items"] = parsed.get("skills", [])
-                # Education section
-                for section in st.session_state.resume_data["sections"]:
-                    if section["type"] == "paragraph" and "education" in section.get("title", "").lower():
-                        edu_str = "\n".join(
-                            f"{e.get('degree', '')}, {e.get('institution', '')} ({e.get('dates', '')}) {e.get('details', '')}"
-                            for e in parsed.get("education", [])
-                        )
-                        section["content"] = edu_str
-                # Experience section
-                for section in st.session_state.resume_data["sections"]:
-                    if section["type"] == "experience":
-                        section["items"] = []
-                        for exp in parsed.get("experience", []):
-                            section["items"].append({
-                                "position": exp.get("position", ""),
-                                "company": exp.get("company", ""),
-                                "date_range": exp.get("date_range", ""),
-                                "bullet_points": exp.get("bullet_points", []),
-                                "formatting": {
-                                    "alignment": "left",
-                                    "font_size": 14,
-                                    "font_weight": "normal"
-                                }
-                            })
-                # Optionally, handle summary
-                if parsed.get("summary"):
-                    st.session_state.resume_data["summary"] = parsed["summary"]
+                # Overwrite the entire resume_data for a clean autofill
+                st.session_state.resume_data = parsed
+                rd = st.session_state.resume_data
+                rd.setdefault("formatting", {
+                    "name_alignment": "center",
+                    "name_weight": "bold",
+                    "section_title_alignment": "center",
+                    "paragraph_alignment": "left"
+                })
+                rd.setdefault("pdf_settings", {
+                    "margins": {"top": "20mm", "right": "20mm", "bottom": "20mm", "left": "20mm"},
+                    "scale": 1.0,
+                    "page_size": "A4",
+                    "zoom": 1.0,
+                    "spacing": 1.3
+                })
+                rd.setdefault("sections", [])
                 st.success("Resume parsed and autofilled! Please review and edit as needed.")
             else:
                 st.error("Failed to parse resume. Please check your file format.")
@@ -304,13 +280,17 @@ def main():
     st.header("Basic Information")
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.resume_data["name"] = st.text_input("Full Name", st.session_state.resume_data["name"])
+        st.session_state.resume_data["name"] = st.text_input(
+            "Full Name", st.session_state.resume_data.get("name", "Full Name")
+        )
     with col2:
-        st.session_state.resume_data["title"] = st.text_input("Professional Title", st.session_state.resume_data["title"])
+        st.session_state.resume_data["title"] = st.text_input(
+            "Professional Title", st.session_state.resume_data.get("title", "Professional Title")
+        )
     
     st.session_state.resume_data["contact_info"] = st.text_area(
-        "Contact Information (separate items with '|')", 
-        st.session_state.resume_data["contact_info"]
+        "Contact Information (separate items with '|')",
+        st.session_state.resume_data.get("contact_info", "")
     )
 
     # Resume Sections
@@ -358,11 +338,15 @@ def main():
             }]
         st.session_state.resume_data["sections"].append(new_section)
     
+    if "sections" not in st.session_state.resume_data or not isinstance(st.session_state.resume_data["sections"], list):
+        st.session_state.resume_data["sections"] = []
     # Edit existing sections
     for i, section in enumerate(st.session_state.resume_data["sections"]):
-        # Ensure formatting exists for each section
-        section.setdefault("title_formatting", {"alignment": "left", "font_size": 16, "font_weight": "bold"})
-        section.setdefault("content_formatting", {"alignment": "left", "font_size": 14, "font_weight": "normal"})
+        # Ensure formatting is a dict, not None
+        if not isinstance(section.get("title_formatting"), dict):
+            section["title_formatting"] = {"alignment": "left", "font_size": 16, "font_weight": "bold"}
+        if not isinstance(section.get("content_formatting"), dict):
+            section["content_formatting"] = {"alignment": "left", "font_size": 14, "font_weight": "normal"}
 
         # Main section expander
         with st.expander(f"Section: {section.get('title', 'Untitled')}", expanded=True):
@@ -513,6 +497,13 @@ def main():
                     key=f"content_fontweight_{i}"
                 )
 
+    rd = st.session_state.resume_data
+    rd.setdefault("formatting", {
+        "name_alignment": "center",
+        "name_weight": "bold",
+        "section_title_alignment": "center",
+        "paragraph_alignment": "left"
+    })
     # Live Preview
     st.header("Live Resume Preview")
     sections_html = "".join(
