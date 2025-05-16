@@ -376,6 +376,8 @@ def main():
                     section["items"] = [{"position": "", "company": "", "date_range": "", "bullet_points": [""]}]
                 
                 for j, exp in enumerate(section["items"]):
+                    # Ensure date_range is a string and not None
+                    exp["date_range"] = exp.get("date_range") or ""
                     st.subheader(f"Experience {j+1}")
                     exp["position"] = st.text_input(f"Position {j+1}", exp.get("position", ""), key=f"position_{i}_{j}")
                     col1, col2 = st.columns(2)
