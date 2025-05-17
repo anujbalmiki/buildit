@@ -463,18 +463,20 @@ def main():
                             st.write("Bullet Points:")
                             # --- REORDER EXPERIENCE BULLETS ---
                             for k, bullet in enumerate(exp["bullet_points"]):
-                                bpcol1, bpcol2, bpcol3, bpcol4 = st.columns([0.05, 0.8, 0.05, 0.1])
-                                with bpcol1:
+                                # Avoid nested columns inside columns (Streamlit limitation)
+                                st.markdown(f"**Bullet {k+1}**")
+                                bpcol = st.columns([0.1, 0.7, 0.1, 0.1])
+                                with bpcol[0]:
                                     if st.button("⬆️", key=f"exp_bp_up_{i}_{j}_{k}") and k > 0:
                                         exp["bullet_points"][k-1], exp["bullet_points"][k] = exp["bullet_points"][k], exp["bullet_points"][k-1]
                                         st.rerun()
-                                with bpcol3:
+                                with bpcol[2]:
                                     if st.button("⬇️", key=f"exp_bp_down_{i}_{j}_{k}") and k < len(exp["bullet_points"]) - 1:
                                         exp["bullet_points"][k+1], exp["bullet_points"][k] = exp["bullet_points"][k], exp["bullet_points"][k+1]
                                         st.rerun()
-                                with bpcol2:
+                                with bpcol[1]:
                                     exp["bullet_points"][k] = st.text_input(f"Bullet {k+1}", bullet, key=f"exp_bullet_{i}_{j}_{k}")
-                                with bpcol4:
+                                with bpcol[3]:
                                     if st.button("❌", key=f"remove_exp_bullet_{i}_{j}_{k}") and len(exp["bullet_points"]) > 1:
                                         exp["bullet_points"].pop(k)
                                         st.rerun()
