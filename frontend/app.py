@@ -307,7 +307,6 @@ def main():
     
     new_section_type = st.selectbox("Add New Section Type", list(section_types.keys()))
     
-    # When adding a new section, initialize its formatting
     if st.button("Add New Section"):
         new_section = {
             "type": section_types[new_section_type],
@@ -342,164 +341,199 @@ def main():
     
     if "sections" not in st.session_state.resume_data or not isinstance(st.session_state.resume_data["sections"], list):
         st.session_state.resume_data["sections"] = []
-    # Edit existing sections
+
+    # --- REORDER SECTIONS ---
     for i, section in enumerate(st.session_state.resume_data["sections"]):
-        # Ensure formatting is a dict, not None
-        if not isinstance(section.get("title_formatting"), dict):
-            section["title_formatting"] = {"alignment": "left", "font_size": 16, "font_weight": "bold"}
-        if not isinstance(section.get("content_formatting"), dict):
-            section["content_formatting"] = {"alignment": "left", "font_size": 14, "font_weight": "normal"}
+        colA, colB, colC = st.columns([0.1, 0.8, 0.1])
+        with colA:
+            if st.button("⬆️", key=f"move_up_{i}") and i > 0:
+                st.session_state.resume_data["sections"][i-1], st.session_state.resume_data["sections"][i] = \
+                    st.session_state.resume_data["sections"][i], st.session_state.resume_data["sections"][i-1]
+                st.rerun()
+        with colC:
+            if st.button("⬇️", key=f"move_down_{i}") and i < len(st.session_state.resume_data["sections"]) - 1:
+                st.session_state.resume_data["sections"][i+1], st.session_state.resume_data["sections"][i] = \
+                    st.session_state.resume_data["sections"][i], st.session_state.resume_data["sections"][i+1]
+                st.rerun()
+        with colB:
+            # Ensure formatting is a dict, not None
+            if not isinstance(section.get("title_formatting"), dict):
+                section["title_formatting"] = {"alignment": "left", "font_size": 16, "font_weight": "bold"}
+            if not isinstance(section.get("content_formatting"), dict):
+                section["content_formatting"] = {"alignment": "left", "font_size": 14, "font_weight": "normal"}
 
-        # Main section expander
-        with st.expander(f"Section: {section.get('title', 'Untitled')}", expanded=True):
-            section["title"] = st.text_input(f"Section Title {i+1}", section.get("title", ""), key=f"title_{i}")
+            with st.expander(f"Section: {section.get('title', 'Untitled')}", expanded=True):
+                section["title"] = st.text_input(f"Section Title {i+1}", section.get("title", ""), key=f"title_{i}")
 
-            if section["type"] == "paragraph":
-                section["content"] = st.text_area(f"Content {i+1}", section.get("content", ""), key=f"content_{i}")
-            
-            elif section["type"] == "bullet_points":
-                if "items" not in section:
-                    section["items"] = [""]
+                if section["type"] == "paragraph":
+                    section["content"] = st.text_area(f"Content {i+1}", section.get("content", ""), key=f"content_{i}")
                 
-                for j, item in enumerate(section["items"]):
-                    col1, col2 = st.columns([0.9, 0.1])
-                    with col1:
-                        section["items"][j] = st.text_input(f"Bullet Point {j+1}", item, key=f"bullet_{i}_{j}")
-                    with col2:
-                        if st.button("❌", key=f"remove_bullet_{i}_{j}") and len(section["items"]) > 1:
-                            section["items"].pop(j)
-                            st.rerun()
-                
-                if st.button("➕ Add Bullet Point", key=f"add_bullet_{i}"):
-                    section["items"].append("")
-            
-            elif section["type"] == "experience":
-                if "items" not in section:
-                    section["items"] = [{"position": "", "company": "", "date_range": "", "bullet_points": [""]}]
-                
-                for j, exp in enumerate(section["items"]):
-                    # Ensure date_range is a string and not None
-                    exp["date_range"] = exp.get("date_range") or ""
-                    st.subheader(f"Experience {j+1}")
-                    exp["position"] = st.text_input(f"Position {j+1}", exp.get("position", ""), key=f"position_{i}_{j}")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        exp["company"] = st.text_input(f"Company {j+1}", exp.get("company", ""), key=f"company_{i}_{j}")
-                    with col2:
-                        # --- Month/Year Chooser ---
-                        months = list(calendar.month_name)[1:]  # ['January', ..., 'December']
-                        existing_range = exp.get("date_range", "")
-                        # Default values
-                        start_month, start_year = months[0], datetime.now().year
-                        end_month, end_year = "", ""
-                        end_type = "Present"
-
-                        try:
-                            if existing_range:
-                                parts = existing_range.split(" - ")
-                                # Parse start
-                                if len(parts) > 0:
-                                    sm, sy = parts[0].rsplit(" ", 1)
-                                    if sm in months and sy.isdigit():
-                                        start_month, start_year = sm, int(sy)
-                                # Parse end
-                                if len(parts) > 1:
-                                    if parts[1] == "Present":
-                                        end_type = "Present"
-                                        end_month, end_year = "", ""
-                                    else:
-                                        em, ey = parts[1].rsplit(" ", 1)
-                                        if em in months and ey.isdigit():
-                                            end_type = "Specific Month"
-                                            end_month, end_year = em, int(ey)
-                        except Exception:
-                            pass
-
-                        start_month = st.selectbox(
-                            f"Start Month {j+1}", months, index=months.index(start_month), key=f"start_month_{i}_{j}"
-                        )
-                        start_year = st.number_input(
-                            f"Start Year {j+1}", min_value=1950, max_value=2100, value=start_year, key=f"start_year_{i}_{j}"
-                        )
-                        end_type = st.radio(
-                            f"End Date Type {j+1}", ["Present", "Specific Month"], index=0 if end_type == "Present" else 1, key=f"end_type_{i}_{j}"
-                        )
-                        if end_type == "Specific Month":
-                            end_month = st.selectbox(
-                                f"End Month {j+1}", months, index=months.index(end_month) if end_month in months else 0, key=f"end_month_{i}_{j}"
-                            )
-                            end_year = st.number_input(
-                                f"End Year {j+1}", min_value=1950, max_value=2100, value=end_year if isinstance(end_year, int) else datetime.now().year, key=f"end_year_{i}_{j}"
-                            )
-                            exp["date_range"] = f"{start_month} {start_year} - {end_month} {end_year}"
-                        else:
-                            exp["date_range"] = f"{start_month} {start_year} - Present"
-
-                    st.write("Bullet Points:")
-                    for k, bullet in enumerate(exp["bullet_points"]):
-                        col1, col2 = st.columns([0.9, 0.1])
-                        with col1:
-                            exp["bullet_points"][k] = st.text_input(f"Bullet {k+1}", bullet, key=f"exp_bullet_{i}_{j}_{k}")
-                        with col2:
-                            if st.button("❌", key=f"remove_exp_bullet_{i}_{j}_{k}") and len(exp["bullet_points"]) > 1:
-                                exp["bullet_points"].pop(k)
+                elif section["type"] == "bullet_points":
+                    if "items" not in section:
+                        section["items"] = [""]
+                    
+                    # --- REORDER BULLET POINTS ---
+                    for j, item in enumerate(section["items"]):
+                        bcol1, bcol2, bcol3, bcol4 = st.columns([0.05, 0.8, 0.05, 0.1])
+                        with bcol1:
+                            if st.button("⬆️", key=f"bp_up_{i}_{j}") and j > 0:
+                                section["items"][j-1], section["items"][j] = section["items"][j], section["items"][j-1]
+                                st.rerun()
+                        with bcol3:
+                            if st.button("⬇️", key=f"bp_down_{i}_{j}") and j < len(section["items"]) - 1:
+                                section["items"][j+1], section["items"][j] = section["items"][j], section["items"][j+1]
+                                st.rerun()
+                        with bcol2:
+                            section["items"][j] = st.text_input(f"Bullet Point {j+1}", item, key=f"bullet_{i}_{j}")
+                        with bcol4:
+                            if st.button("❌", key=f"remove_bullet_{i}_{j}") and len(section["items"]) > 1:
+                                section["items"].pop(j)
                                 st.rerun()
                     
-                    if st.button("➕ Add Bullet Point", key=f"add_exp_bullet_{i}_{j}"):
-                        exp["bullet_points"].append("")
-                    
-                    if st.button("❌ Remove Experience", key=f"remove_exp_{i}_{j}") and len(section["items"]) > 1:
-                        section["items"].pop(j)
-                        st.rerun()
+                    if st.button("➕ Add Bullet Point", key=f"add_bullet_{i}"):
+                        section["items"].append("")
                 
-                if st.button("➕ Add Experience", key=f"add_exp_{i}"):
-                    section["items"].append({"position": "", "company": "", "date_range": "", "bullet_points": [""]})
-            
-            if st.button("❌ Remove Section", key=f"remove_section_{i}"):
-                st.session_state.resume_data["sections"].pop(i)
-                st.rerun()
+                elif section["type"] == "experience":
+                    if "items" not in section:
+                        section["items"] = [{"position": "", "company": "", "date_range": "", "bullet_points": [""]}]
+                    
+                    # --- REORDER EXPERIENCE ITEMS ---
+                    for j, exp in enumerate(section["items"]):
+                        ecol1, ecol2, ecol3 = st.columns([0.05, 0.9, 0.05])
+                        with ecol1:
+                            if st.button("⬆️", key=f"exp_up_{i}_{j}") and j > 0:
+                                section["items"][j-1], section["items"][j] = section["items"][j], section["items"][j-1]
+                                st.rerun()
+                        with ecol3:
+                            if st.button("⬇️", key=f"exp_down_{i}_{j}") and j < len(section["items"]) - 1:
+                                section["items"][j+1], section["items"][j] = section["items"][j], section["items"][j+1]
+                                st.rerun()
+                        with ecol2:
+                            exp["date_range"] = exp.get("date_range") or ""
+                            st.subheader(f"Experience {j+1}")
+                            exp["position"] = st.text_input(f"Position {j+1}", exp.get("position", ""), key=f"position_{i}_{j}")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                exp["company"] = st.text_input(f"Company {j+1}", exp.get("company", ""), key=f"company_{i}_{j}")
+                            with col2:
+                                months = list(calendar.month_name)[1:]
+                                existing_range = exp.get("date_range", "")
+                                start_month, start_year = months[0], datetime.now().year
+                                end_month, end_year = "", ""
+                                end_type = "Present"
+                                try:
+                                    if existing_range:
+                                        parts = existing_range.split(" - ")
+                                        if len(parts) > 0:
+                                            sm, sy = parts[0].rsplit(" ", 1)
+                                            if sm in months and sy.isdigit():
+                                                start_month, start_year = sm, int(sy)
+                                        if len(parts) > 1:
+                                            if parts[1] == "Present":
+                                                end_type = "Present"
+                                                end_month, end_year = "", ""
+                                            else:
+                                                em, ey = parts[1].rsplit(" ", 1)
+                                                if em in months and ey.isdigit():
+                                                    end_type = "Specific Month"
+                                                    end_month, end_year = em, int(ey)
+                                except Exception:
+                                    pass
 
-        # Section Formatting expander (NOT nested)
-        with st.expander(f"Section Formatting: {section.get('title', 'Untitled')}", expanded=False):
-            st.markdown("**Section Title Formatting**")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                section["title_formatting"]["alignment"] = st.selectbox(
-                    "Title Alignment", ["left", "center", "right"],
-                    index=["left", "center", "right"].index(section["title_formatting"].get("alignment", "left")),
-                    key=f"title_align_{i}"
-                )
-            with col2:
-                section["title_formatting"]["font_size"] = st.number_input(
-                    "Title Font Size", min_value=10, max_value=32, value=section["title_formatting"].get("font_size", 16),
-                    key=f"title_fontsize_{i}"
-                )
-            with col3:
-                section["title_formatting"]["font_weight"] = st.selectbox(
-                    "Title Font Weight", ["normal", "bold", "bolder"],
-                    index=["normal", "bold", "bolder"].index(section["title_formatting"].get("font_weight", "bold")),
-                    key=f"title_fontweight_{i}"
-                )
+                                start_month = st.selectbox(
+                                    f"Start Month {j+1}", months, index=months.index(start_month), key=f"start_month_{i}_{j}"
+                                )
+                                start_year = st.number_input(
+                                    f"Start Year {j+1}", min_value=1950, max_value=2100, value=start_year, key=f"start_year_{i}_{j}"
+                                )
+                                end_type = st.radio(
+                                    f"End Date Type {j+1}", ["Present", "Specific Month"], index=0 if end_type == "Present" else 1, key=f"end_type_{i}_{j}"
+                                )
+                                if end_type == "Specific Month":
+                                    end_month = st.selectbox(
+                                        f"End Month {j+1}", months, index=months.index(end_month) if end_month in months else 0, key=f"end_month_{i}_{j}"
+                                    )
+                                    end_year = st.number_input(
+                                        f"End Year {j+1}", min_value=1950, max_value=2100, value=end_year if isinstance(end_year, int) else datetime.now().year, key=f"end_year_{i}_{j}"
+                                    )
+                                    exp["date_range"] = f"{start_month} {start_year} - {end_month} {end_year}"
+                                else:
+                                    exp["date_range"] = f"{start_month} {start_year} - Present"
 
-            st.markdown("**Section Content Formatting**")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                section["content_formatting"]["alignment"] = st.selectbox(
-                    "Content Alignment", ["left", "center", "right", "justify"],
-                    index=["left", "center", "right", "justify"].index(section["content_formatting"].get("alignment", "left")),
-                    key=f"content_align_{i}"
-                )
-            with col2:
-                section["content_formatting"]["font_size"] = st.number_input(
-                    "Content Font Size", min_value=10, max_value=32, value=section["content_formatting"].get("font_size", 14),
-                    key=f"content_fontsize_{i}"
-                )
-            with col3:
-                section["content_formatting"]["font_weight"] = st.selectbox(
-                    "Content Font Weight", ["normal", "bold", "bolder"],
-                    index=["normal", "bold", "bolder"].index(section["content_formatting"].get("font_weight", "normal")),
-                    key=f"content_fontweight_{i}"
-                )
+                            st.write("Bullet Points:")
+                            # --- REORDER EXPERIENCE BULLETS ---
+                            for k, bullet in enumerate(exp["bullet_points"]):
+                                bpcol1, bpcol2, bpcol3, bpcol4 = st.columns([0.05, 0.8, 0.05, 0.1])
+                                with bpcol1:
+                                    if st.button("⬆️", key=f"exp_bp_up_{i}_{j}_{k}") and k > 0:
+                                        exp["bullet_points"][k-1], exp["bullet_points"][k] = exp["bullet_points"][k], exp["bullet_points"][k-1]
+                                        st.rerun()
+                                with bpcol3:
+                                    if st.button("⬇️", key=f"exp_bp_down_{i}_{j}_{k}") and k < len(exp["bullet_points"]) - 1:
+                                        exp["bullet_points"][k+1], exp["bullet_points"][k] = exp["bullet_points"][k], exp["bullet_points"][k+1]
+                                        st.rerun()
+                                with bpcol2:
+                                    exp["bullet_points"][k] = st.text_input(f"Bullet {k+1}", bullet, key=f"exp_bullet_{i}_{j}_{k}")
+                                with bpcol4:
+                                    if st.button("❌", key=f"remove_exp_bullet_{i}_{j}_{k}") and len(exp["bullet_points"]) > 1:
+                                        exp["bullet_points"].pop(k)
+                                        st.rerun()
+                            
+                            if st.button("➕ Add Bullet Point", key=f"add_exp_bullet_{i}_{j}"):
+                                exp["bullet_points"].append("")
+                            
+                            if st.button("❌ Remove Experience", key=f"remove_exp_{i}_{j}") and len(section["items"]) > 1:
+                                section["items"].pop(j)
+                                st.rerun()
+                    
+                    if st.button("➕ Add Experience", key=f"add_exp_{i}"):
+                        section["items"].append({"position": "", "company": "", "date_range": "", "bullet_points": [""]})
+                
+                if st.button("❌ Remove Section", key=f"remove_section_{i}"):
+                    st.session_state.resume_data["sections"].pop(i)
+                    st.rerun()
+
+            # Section Formatting expander (NOT nested)
+            with st.expander(f"Section Formatting: {section.get('title', 'Untitled')}", expanded=False):
+                st.markdown("**Section Title Formatting**")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    section["title_formatting"]["alignment"] = st.selectbox(
+                        "Title Alignment", ["left", "center", "right"],
+                        index=["left", "center", "right"].index(section["title_formatting"].get("alignment", "left")),
+                        key=f"title_align_{i}"
+                    )
+                with col2:
+                    section["title_formatting"]["font_size"] = st.number_input(
+                        "Title Font Size", min_value=10, max_value=32, value=section["title_formatting"].get("font_size", 16),
+                        key=f"title_fontsize_{i}"
+                    )
+                with col3:
+                    section["title_formatting"]["font_weight"] = st.selectbox(
+                        "Title Font Weight", ["normal", "bold", "bolder"],
+                        index=["normal", "bold", "bolder"].index(section["title_formatting"].get("font_weight", "bold")),
+                        key=f"title_fontweight_{i}"
+                    )
+
+                st.markdown("**Section Content Formatting**")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    section["content_formatting"]["alignment"] = st.selectbox(
+                        "Content Alignment", ["left", "center", "right", "justify"],
+                        index=["left", "center", "right", "justify"].index(section["content_formatting"].get("alignment", "left")),
+                        key=f"content_align_{i}"
+                    )
+                with col2:
+                    section["content_formatting"]["font_size"] = st.number_input(
+                        "Content Font Size", min_value=10, max_value=32, value=section["content_formatting"].get("font_size", 14),
+                        key=f"content_fontsize_{i}"
+                    )
+                with col3:
+                    section["content_formatting"]["font_weight"] = st.selectbox(
+                        "Content Font Weight", ["normal", "bold", "bolder"],
+                        index=["normal", "bold", "bolder"].index(section["content_formatting"].get("font_weight", "normal")),
+                        key=f"content_fontweight_{i}"
+                    )
 
     rd = st.session_state.resume_data
     rd.setdefault("formatting", {
