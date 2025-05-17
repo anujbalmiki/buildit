@@ -412,84 +412,79 @@ def main():
                             exp["date_range"] = exp.get("date_range") or ""
                             st.subheader(f"Experience {j+1}")
                             exp["position"] = st.text_input(f"Position {j+1}", exp.get("position", ""), key=f"position_{i}_{j}")
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                exp["company"] = st.text_input(f"Company {j+1}", exp.get("company", ""), key=f"company_{i}_{j}")
-                            with col2:
-                                months = list(calendar.month_name)[1:]
-                                existing_range = exp.get("date_range", "")
-                                start_month, start_year = months[0], datetime.now().year
-                                end_month, end_year = "", ""
-                                end_type = "Present"
-                                try:
-                                    if existing_range:
-                                        parts = existing_range.split(" - ")
-                                        if len(parts) > 0:
-                                            sm, sy = parts[0].rsplit(" ", 1)
-                                            if sm in months and sy.isdigit():
-                                                start_month, start_year = sm, int(sy)
-                                        if len(parts) > 1:
-                                            if parts[1] == "Present":
-                                                end_type = "Present"
-                                                end_month, end_year = "", ""
-                                            else:
-                                                em, ey = parts[1].rsplit(" ", 1)
-                                                if em in months and ey.isdigit():
-                                                    end_type = "Specific Month"
-                                                    end_month, end_year = em, int(ey)
-                                except Exception:
-                                    pass
+                            # Instead of columns, just stack the inputs vertically:
+                            exp["company"] = st.text_input(f"Company {j+1}", exp.get("company", ""), key=f"company_{i}_{j}")
+                            months = list(calendar.month_name)[1:]
+                            existing_range = exp.get("date_range", "")
+                            start_month, start_year = months[0], datetime.now().year
+                            end_month, end_year = "", ""
+                            end_type = "Present"
+                            try:
+                                if existing_range:
+                                    parts = existing_range.split(" - ")
+                                    if len(parts) > 0:
+                                        sm, sy = parts[0].rsplit(" ", 1)
+                                        if sm in months and sy.isdigit():
+                                            start_month, start_year = sm, int(sy)
+                                    if len(parts) > 1:
+                                        if parts[1] == "Present":
+                                            end_type = "Present"
+                                            end_month, end_year = "", ""
+                                        else:
+                                            em, ey = parts[1].rsplit(" ", 1)
+                                            if em in months and ey.isdigit():
+                                                end_type = "Specific Month"
+                                                end_month, end_year = em, int(ey)
+                            except Exception:
+                                pass
 
-                                start_month = st.selectbox(
-                                    f"Start Month {j+1}", months, index=months.index(start_month), key=f"start_month_{i}_{j}"
+                            start_month = st.selectbox(
+                                f"Start Month {j+1}", months, index=months.index(start_month), key=f"start_month_{i}_{j}"
+                            )
+                            start_year = st.number_input(
+                                f"Start Year {j+1}", min_value=1950, max_value=2100, value=start_year, key=f"start_year_{i}_{j}"
+                            )
+                            end_type = st.radio(
+                                f"End Date Type {j+1}", ["Present", "Specific Month"], index=0 if end_type == "Present" else 1, key=f"end_type_{i}_{j}"
+                            )
+                            if end_type == "Specific Month":
+                                end_month = st.selectbox(
+                                    f"End Month {j+1}", months, index=months.index(end_month) if end_month in months else 0, key=f"end_month_{i}_{j}"
                                 )
-                                start_year = st.number_input(
-                                    f"Start Year {j+1}", min_value=1950, max_value=2100, value=start_year, key=f"start_year_{i}_{j}"
+                                end_year = st.number_input(
+                                    f"End Year {j+1}", min_value=1950, max_value=2100, value=end_year if isinstance(end_year, int) else datetime.now().year, key=f"end_year_{i}_{j}"
                                 )
-                                end_type = st.radio(
-                                    f"End Date Type {j+1}", ["Present", "Specific Month"], index=0 if end_type == "Present" else 1, key=f"end_type_{i}_{j}"
-                                )
-                                if end_type == "Specific Month":
-                                    end_month = st.selectbox(
-                                        f"End Month {j+1}", months, index=months.index(end_month) if end_month in months else 0, key=f"end_month_{i}_{j}"
-                                    )
-                                    end_year = st.number_input(
-                                        f"End Year {j+1}", min_value=1950, max_value=2100, value=end_year if isinstance(end_year, int) else datetime.now().year, key=f"end_year_{i}_{j}"
-                                    )
-                                    exp["date_range"] = f"{start_month} {start_year} - {end_month} {end_year}"
-                                else:
-                                    exp["date_range"] = f"{start_month} {start_year} - Present"
+                                exp["date_range"] = f"{start_month} {start_year} - {end_month} {end_year}"
+                            else:
+                                exp["date_range"] = f"{start_month} {start_year} - Present"
 
-                            st.write("Bullet Points:")
-                            # --- REORDER EXPERIENCE BULLETS ---
-                            for k, bullet in enumerate(exp["bullet_points"]):
-                                # Avoid nested columns inside columns (Streamlit limitation)
-                                st.markdown(f"**Bullet {k+1}**")
-                                bpcol = st.columns([0.1, 0.7, 0.1, 0.1])
-                                with bpcol[0]:
-                                    if st.button("⬆️", key=f"exp_bp_up_{i}_{j}_{k}") and k > 0:
-                                        exp["bullet_points"][k-1], exp["bullet_points"][k] = exp["bullet_points"][k], exp["bullet_points"][k-1]
-                                        st.rerun()
-                                with bpcol[2]:
-                                    if st.button("⬇️", key=f"exp_bp_down_{i}_{j}_{k}") and k < len(exp["bullet_points"]) - 1:
-                                        exp["bullet_points"][k+1], exp["bullet_points"][k] = exp["bullet_points"][k], exp["bullet_points"][k+1]
-                                        st.rerun()
-                                with bpcol[1]:
-                                    exp["bullet_points"][k] = st.text_input(f"Bullet {k+1}", bullet, key=f"exp_bullet_{i}_{j}_{k}")
-                                with bpcol[3]:
-                                    if st.button("❌", key=f"remove_exp_bullet_{i}_{j}_{k}") and len(exp["bullet_points"]) > 1:
-                                        exp["bullet_points"].pop(k)
-                                        st.rerun()
-                            
-                            if st.button("➕ Add Bullet Point", key=f"add_exp_bullet_{i}_{j}"):
-                                exp["bullet_points"].append("")
-                            
-                            if st.button("❌ Remove Experience", key=f"remove_exp_{i}_{j}") and len(section["items"]) > 1:
-                                section["items"].pop(j)
-                                st.rerun()
-                    
-                    if st.button("➕ Add Experience", key=f"add_exp_{i}"):
-                        section["items"].append({"position": "", "company": "", "date_range": "", "bullet_points": [""]})
+                        st.write("Bullet Points:")
+                        # --- REORDER EXPERIENCE BULLETS ---
+                        for k, bullet in enumerate(exp["bullet_points"]):
+                            # Avoid nested columns inside columns (Streamlit limitation)
+                            st.markdown(f"**Bullet {k+1}**")
+                            bpcol = st.columns([0.1, 0.7, 0.1, 0.1])
+                            with bpcol[0]:
+                                if st.button("⬆️", key=f"exp_bp_up_{i}_{j}_{k}") and k > 0:
+                                    exp["bullet_points"][k-1], exp["bullet_points"][k] = exp["bullet_points"][k], exp["bullet_points"][k-1]
+                                    st.rerun()
+                            with bpcol[2]:
+                                if st.button("⬇️", key=f"exp_bp_down_{i}_{j}_{k}") and k < len(exp["bullet_points"]) - 1:
+                                    exp["bullet_points"][k+1], exp["bullet_points"][k] = exp["bullet_points"][k], exp["bullet_points"][k+1]
+                                    st.rerun()
+                            with bpcol[1]:
+                                exp["bullet_points"][k] = st.text_input(f"Bullet {k+1}", bullet, key=f"exp_bullet_{i}_{j}_{k}")
+                            with bpcol[3]:
+                                if st.button("❌", key=f"remove_exp_bullet_{i}_{j}_{k}") and len(exp["bullet_points"]) > 1:
+                                    exp["bullet_points"].pop(k)
+                                    st.rerun()
+                        
+                        if st.button("➕ Add Bullet Point", key=f"add_exp_bullet_{i}_{j}"):
+                            exp["bullet_points"].append("")
+                        
+                        if st.button("❌ Remove Experience", key=f"remove_exp_{i}_{j}") and len(section["items"]) > 1:
+                            section["items"].pop(j)
+                            st.rerun()
                 
                 if st.button("❌ Remove Section", key=f"remove_section_{i}"):
                     st.session_state.resume_data["sections"].pop(i)
