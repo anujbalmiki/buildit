@@ -193,6 +193,15 @@ def get_section_content(section_type, section_data):
                 f"<ul>{bullets}</ul>"
             )
         return f'<div class="section-title" style="{title_style}">{section_data["title"]}</div>{items}'
+    elif section_type == "education":
+        items = ""
+        for edu in section_data["items"]:
+            items += (
+                f"<p style='{content_style}'><strong>{edu.get('degree', '')}</strong>, {edu.get('institution', '')} "
+                f"<span style='float:right;'>{edu.get('dates', '')}</span></p>"
+                f"<p style='{content_style}'>{edu.get('details', '')}</p>"
+            )
+        return f"<div class='section-title' style='{title_style}'>{section_data['title']}</div>{items}"
     return ""
 
 def load_resume(email):
@@ -302,7 +311,8 @@ def main():
     section_types = {
         "Paragraph": "paragraph",
         "Bullet Points": "bullet_points",
-        "Experience": "experience"
+        "Experience": "experience",
+        "Education": "education"  # Add this line
     }
     
     new_section_type = st.selectbox("Add New Section Type", list(section_types.keys()))
@@ -337,6 +347,13 @@ def main():
                     "font_weight": "normal"
                 }
             }]
+        elif new_section["type"] == "education":
+            new_section["items"] = [{
+                "degree": "",
+                "institution": "",
+                "dates": "",
+                "details": ""
+            }]
         st.session_state.resume_data["sections"].append(new_section)
     
     if "sections" not in st.session_state.resume_data or not isinstance(st.session_state.resume_data["sections"], list):
@@ -350,11 +367,13 @@ def main():
                 st.session_state.resume_data["sections"][i-1], st.session_state.resume_data["sections"][i] = \
                     st.session_state.resume_data["sections"][i], st.session_state.resume_data["sections"][i-1]
                 st.rerun()
+                return  # <-- Add this line
         with colC:
             if st.button("⬇️", key=f"move_down_{i}") and i < len(st.session_state.resume_data["sections"]) - 1:
                 st.session_state.resume_data["sections"][i+1], st.session_state.resume_data["sections"][i] = \
                     st.session_state.resume_data["sections"][i], st.session_state.resume_data["sections"][i+1]
                 st.rerun()
+                return  # <-- Add this line
         with colB:
             # Ensure formatting is a dict, not None
             if not isinstance(section.get("title_formatting"), dict):
@@ -485,6 +504,51 @@ def main():
                         if st.button("❌ Remove Experience", key=f"remove_exp_{i}_{j}") and len(section["items"]) > 1:
                             section["items"].pop(j)
                             st.rerun()
+                    
+                    if st.button("➕ Add Experience", key=f"add_exp_{i}"):
+                        section["items"].append({
+                            "position": "",
+                            "company": "",
+                            "date_range": "",
+                            "bullet_points": [""],
+                            "formatting": {
+                                "alignment": "left",
+                                "font_size": 14,
+                                "font_weight": "normal"
+                            }
+                        })
+                        st.rerun()
+                
+                elif section["type"] == "education":
+                    if "items" not in section:
+                        section["items"] = [{
+                            "degree": "",
+                            "institution": "",
+                            "dates": "",
+                            "details": ""
+                        }]
+                    for j, edu in enumerate(section["items"]):
+                        ecol1, ecol2, ecol3, ecol4, ecol5 = st.columns([0.2, 0.2, 0.2, 0.2, 0.2])
+                        with ecol1:
+                            edu["degree"] = st.text_input(f"Degree {j+1}", edu.get("degree", ""), key=f"edu_degree_{i}_{j}")
+                        with ecol2:
+                            edu["institution"] = st.text_input(f"Institution {j+1}", edu.get("institution", ""), key=f"edu_inst_{i}_{j}")
+                        with ecol3:
+                            edu["dates"] = st.text_input(f"Dates {j+1}", edu.get("dates", ""), key=f"edu_dates_{i}_{j}")
+                        with ecol4:
+                            edu["details"] = st.text_input(f"Details {j+1}", edu.get("details", ""), key=f"edu_details_{i}_{j}")
+                        with ecol5:
+                            if st.button("❌", key=f"remove_edu_{i}_{j}") and len(section["items"]) > 1:
+                                section["items"].pop(j)
+                                st.rerun()
+                    if st.button("➕ Add Education", key=f"add_edu_{i}"):
+                        section["items"].append({
+                            "degree": "",
+                            "institution": "",
+                            "dates": "",
+                            "details": ""
+                        })
+                        st.rerun()
                 
                 if st.button("❌ Remove Section", key=f"remove_section_{i}"):
                     st.session_state.resume_data["sections"].pop(i)
