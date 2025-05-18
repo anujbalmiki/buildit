@@ -66,7 +66,7 @@ RESUME_TEMPLATE = """
             .resume-container {{
                 max-width: 800px;
                 margin: auto;
-                padding: 25px;
+                padding: 0 25px 25px 25px;
                 border: none;
             }}
 
@@ -83,6 +83,7 @@ RESUME_TEMPLATE = """
             h2 {{
                 font-size: 16px;
                 font-weight: normal;
+                margin-top: 0;
             }}
 
             .section-title {{
@@ -187,18 +188,19 @@ def get_section_content(section_type, section_data):
             bullets = "".join(
                 f'<li style="{content_style}">{bullet}</li>' for bullet in exp["bullet_points"]
             )
+            date_html = f"<span style='float:right;'>{format_date_range(exp)}</span>" if format_date_range(exp) else ""
+            company_html = f', {exp["company"]}' if exp.get("company") else ""
             items += (
-                f'<p style="{content_style}"><strong>{exp["position"]}</strong>, {exp["company"]} '
-                f'<span style="float:right;">{exp["date_range"]}</span></p>'
+                f'<p style="{content_style}"><strong>{exp.get("position", "")}</strong>{company_html} {date_html}</p>'
                 f"<ul>{bullets}</ul>"
             )
         return f'<div class="section-title" style="{title_style}">{section_data["title"]}</div>{items}'
     elif section_type == "education":
         items = ""
         for edu in section_data["items"]:
+            date_html = f"<span style='float:right;'>{format_date_range(edu)}</span>" if format_date_range(edu) else ""
             items += (
-                f"<p style='{content_style}'><strong>{edu.get('degree', '')}</strong>, {edu.get('institution', '')} "
-                f"<span style='float:right;'>{edu.get('dates', '')}</span></p>"
+                f"<p style='{content_style}'><strong>{edu.get('degree', '')}</strong>, {edu.get('institution', '')} {date_html}</p>"
                 f"<p style='{content_style}'>{edu.get('details', '')}</p>"
             )
         return f"<div class='section-title' style='{title_style}'>{section_data['title']}</div>{items}"
@@ -222,15 +224,52 @@ def save_resume(email, resume_data):
         upsert=True               # Insert if not exists, update if exists
     )
 
+def format_date_range(exp):
+    sm, sy = exp.get("start_month"), exp.get("start_year")
+    et, em, ey = exp.get("end_type"), exp.get("end_month"), exp.get("end_year")
+
+    # Only year present
+    if not sy:
+        return ""
+    start = f"{sm} {sy}" if sm else f"{sy}"
+
+    if et == "Present":
+        return f"{start} - Present"
+    elif et == "Specific Month" and ey:
+        end = f"{em} {ey}" if em else f"{ey}"
+        return f"{start} - {end}"
+    else:
+        return start
+
+def icon_button(icon, key, tooltip="", on_click=None):
+    btn_html = f"""
+    <button title="{tooltip}" style="
+        background: none;
+        border: none;
+        padding: 0 2px;
+        margin: 0 2px;
+        cursor: pointer;
+        color: #fff;
+        font-size: 1.1em;
+        vertical-align: middle;
+    ">{icon}</button>
+    """
+    return st.markdown(
+        f'<span style="display:inline-block">{btn_html}</span>',
+        unsafe_allow_html=True,
+        key=key
+    )
+
 def main():
+    st.markdown('<a name="load-resume"></a>', unsafe_allow_html=True)
     st.title("Professional Resume Builder")
     st.write("Create an ATS-friendly resume with your preferred formatting")
-
+    
     # Initialize session state with safe defaults
     if 'resume_data' not in st.session_state:
         st.session_state.resume_data = {}
 
-    # Load existing resume
+    # Load existing resume 
     with st.expander("Load Existing Resume"):
         email_to_load = st.text_input("Enter your email to load your resume")
         if st.button("Load Resume") and email_to_load:
@@ -245,7 +284,7 @@ def main():
                     "paragraph_alignment": "left"
                 })
                 rd.setdefault("pdf_settings", {
-                    "margins": {"top": "0mm", "right": "3mm", "bottom": "3mm", "left": "3mm"},
+                    "margins": {"top": "0mm", "right": "8mm", "bottom": "8mm", "left": "8mm"},
                     "scale": 1.0,
                     "page_size": "A4",
                     "zoom": 1.15,
@@ -276,7 +315,7 @@ def main():
                     "paragraph_alignment": "left"
                 })
                 rd.setdefault("pdf_settings", {
-                    "margins": {"top": "0mm", "right": "3mm", "bottom": "3mm", "left": "3mm"},
+                    "margins": {"top": "0mm", "right": "8mm", "bottom": "8mm", "left": "8mm"},
                     "scale": 1.0,
                     "page_size": "A4",
                     "zoom": 1.15,
@@ -339,7 +378,7 @@ def main():
             new_section["items"] = [{
                 "position": "",
                 "company": "",
-                "date_range": "",
+                "date_range": None,
                 "bullet_points": [""],
                 "formatting": {
                     "alignment": "left",
@@ -351,7 +390,7 @@ def main():
             new_section["items"] = [{
                 "degree": "",
                 "institution": "",
-                "dates": "",
+                "dates": None,
                 "details": ""
             }]
         st.session_state.resume_data["sections"].append(new_section)
@@ -361,15 +400,17 @@ def main():
 
     # --- REORDER SECTIONS ---
     for i, section in enumerate(st.session_state.resume_data["sections"]):
+        anchor = f"section_{i}"
+        st.markdown(f'<a name="{anchor}"></a>', unsafe_allow_html=True)
         colA, colB, colC = st.columns([0.1, 0.8, 0.1])
         with colA:
-            if st.button("⬆️", key=f"move_up_{i}") and i > 0:
+            if st.button("▲", key=f"move_up_{i}") and i > 0:
                 st.session_state.resume_data["sections"][i-1], st.session_state.resume_data["sections"][i] = \
                     st.session_state.resume_data["sections"][i], st.session_state.resume_data["sections"][i-1]
                 st.rerun()
                 return  # <-- Add this line
         with colC:
-            if st.button("⬇️", key=f"move_down_{i}") and i < len(st.session_state.resume_data["sections"]) - 1:
+            if st.button("▼", key=f"move_down_{i}") and i < len(st.session_state.resume_data["sections"]) - 1:
                 st.session_state.resume_data["sections"][i+1], st.session_state.resume_data["sections"][i] = \
                     st.session_state.resume_data["sections"][i], st.session_state.resume_data["sections"][i+1]
                 st.rerun()
@@ -395,11 +436,11 @@ def main():
                     for j, item in enumerate(section["items"]):
                         bcol1, bcol2, bcol3, bcol4 = st.columns([0.05, 0.8, 0.05, 0.1])
                         with bcol1:
-                            if st.button("⬆️", key=f"bp_up_{i}_{j}") and j > 0:
+                            if st.button("▲", key=f"bp_up_{i}_{j}") and j > 0:
                                 section["items"][j-1], section["items"][j] = section["items"][j], section["items"][j-1]
                                 st.rerun()
                         with bcol3:
-                            if st.button("⬇️", key=f"bp_down_{i}_{j}") and j < len(section["items"]) - 1:
+                            if st.button("▼", key=f"bp_down_{i}_{j}") and j < len(section["items"]) - 1:
                                 section["items"][j+1], section["items"][j] = section["items"][j], section["items"][j+1]
                                 st.rerun()
                         with bcol2:
@@ -420,11 +461,11 @@ def main():
                     for j, exp in enumerate(section["items"]):
                         ecol1, ecol2, ecol3 = st.columns([0.05, 0.9, 0.05])
                         with ecol1:
-                            if st.button("⬆️", key=f"exp_up_{i}_{j}") and j > 0:
+                            if st.button("▲", key=f"exp_up_{i}_{j}") and j > 0:
                                 section["items"][j-1], section["items"][j] = section["items"][j], section["items"][j-1]
                                 st.rerun()
                         with ecol3:
-                            if st.button("⬇️", key=f"exp_down_{i}_{j}") and j < len(section["items"]) - 1:
+                            if st.button("▼", key=f"exp_down_{i}_{j}") and j < len(section["items"]) - 1:
                                 section["items"][j+1], section["items"][j] = section["items"][j], section["items"][j+1]
                                 st.rerun()
                         with ecol2:
@@ -433,49 +474,47 @@ def main():
                             exp["position"] = st.text_input(f"Position {j+1}", exp.get("position", ""), key=f"position_{i}_{j}")
                             # Instead of columns, just stack the inputs vertically:
                             exp["company"] = st.text_input(f"Company {j+1}", exp.get("company", ""), key=f"company_{i}_{j}")
-                            months = list(calendar.month_name)[1:]
-                            existing_range = exp.get("date_range", "")
-                            start_month, start_year = months[0], datetime.now().year
-                            end_month, end_year = "", ""
-                            end_type = "Present"
-                            try:
-                                if existing_range:
-                                    parts = existing_range.split(" - ")
-                                    if len(parts) > 0:
-                                        sm, sy = parts[0].rsplit(" ", 1)
-                                        if sm in months and sy.isdigit():
-                                            start_month, start_year = sm, int(sy)
-                                    if len(parts) > 1:
-                                        if parts[1] == "Present":
-                                            end_type = "Present"
-                                            end_month, end_year = "", ""
-                                        else:
-                                            em, ey = parts[1].rsplit(" ", 1)
-                                            if em in months and ey.isdigit():
-                                                end_type = "Specific Month"
-                                                end_month, end_year = em, int(ey)
-                            except Exception:
-                                pass
+                            months = ["None"] + list(calendar.month_name)[1:]
+                            years = ["None"] + [str(y) for y in range(1950, 2101)]
 
+                            # Start Date
                             start_month = st.selectbox(
-                                f"Start Month {j+1}", months, index=months.index(start_month), key=f"start_month_{i}_{j}"
+                                f"Start Month {j+1}", months,
+                                index=0 if not exp.get("start_month") else months.index(exp["start_month"]),
+                                key=f"start_month_{i}_{j}"
                             )
-                            start_year = st.number_input(
-                                f"Start Year {j+1}", min_value=1950, max_value=2100, value=start_year, key=f"start_year_{i}_{j}"
+                            start_year = st.selectbox(
+                                f"Start Year {j+1}", years,
+                                index=0 if not exp.get("start_year") else years.index(str(exp["start_year"])),
+                                key=f"start_year_{i}_{j}"
                             )
+
+                            # End Date
                             end_type = st.radio(
-                                f"End Date Type {j+1}", ["Present", "Specific Month"], index=0 if end_type == "Present" else 1, key=f"end_type_{i}_{j}"
+                                f"End Date Type {j+1}", ["None", "Present", "Specific Month"],
+                                index=0 if not exp.get("end_type") else ["None", "Present", "Specific Month"].index(exp["end_type"]),
+                                key=f"end_type_{i}_{j}"
                             )
                             if end_type == "Specific Month":
                                 end_month = st.selectbox(
-                                    f"End Month {j+1}", months, index=months.index(end_month) if end_month in months else 0, key=f"end_month_{i}_{j}"
+                                    f"End Month {j+1}", months,
+                                    index=0 if not exp.get("end_month") else months.index(exp["end_month"]),
+                                    key=f"end_month_{i}_{j}"
                                 )
-                                end_year = st.number_input(
-                                    f"End Year {j+1}", min_value=1950, max_value=2100, value=end_year if isinstance(end_year, int) else datetime.now().year, key=f"end_year_{i}_{j}"
+                                end_year = st.selectbox(
+                                    f"End Year {j+1}", years,
+                                    index=0 if not exp.get("end_year") else years.index(str(exp["end_year"])),
+                                    key=f"end_year_{i}_{j}"
                                 )
-                                exp["date_range"] = f"{start_month} {start_year} - {end_month} {end_year}"
                             else:
-                                exp["date_range"] = f"{start_month} {start_year} - Present"
+                                end_month = end_year = None
+
+                            # Save back to the dict
+                            exp["start_month"] = None if start_month == "None" else start_month
+                            exp["start_year"] = None if start_year == "None" else start_year
+                            exp["end_type"] = end_type
+                            exp["end_month"] = None if (end_type != "Specific Month" or end_month == "None") else end_month
+                            exp["end_year"] = None if (end_type != "Specific Month" or end_year == "None") else end_year
 
                         st.write("Bullet Points:")
                         # --- REORDER EXPERIENCE BULLETS ---
@@ -484,11 +523,11 @@ def main():
                             st.markdown(f"**Bullet {k+1}**")
                             bpcol = st.columns([0.1, 0.7, 0.1, 0.1])
                             with bpcol[0]:
-                                if st.button("⬆️", key=f"exp_bp_up_{i}_{j}_{k}") and k > 0:
+                                if st.button("▲", key=f"exp_bp_up_{i}_{j}_{k}") and k > 0:
                                     exp["bullet_points"][k-1], exp["bullet_points"][k] = exp["bullet_points"][k], exp["bullet_points"][k-1]
                                     st.rerun()
                             with bpcol[2]:
-                                if st.button("⬇️", key=f"exp_bp_down_{i}_{j}_{k}") and k < len(exp["bullet_points"]) - 1:
+                                if st.button("▼", key=f"exp_bp_down_{i}_{j}_{k}") and k < len(exp["bullet_points"]) - 1:
                                     exp["bullet_points"][k+1], exp["bullet_points"][k] = exp["bullet_points"][k], exp["bullet_points"][k+1]
                                     st.rerun()
                             with bpcol[1]:
@@ -534,7 +573,47 @@ def main():
                         with ecol2:
                             edu["institution"] = st.text_input(f"Institution {j+1}", edu.get("institution", ""), key=f"edu_inst_{i}_{j}")
                         with ecol3:
-                            edu["dates"] = st.text_input(f"Dates {j+1}", edu.get("dates", ""), key=f"edu_dates_{i}_{j}")
+                            months = ["None"] + list(calendar.month_name)[1:]
+                            years = ["None"] + [str(y) for y in range(1950, 2101)]
+
+                            # Start Date
+                            edu_start_month = st.selectbox(
+                                f"Start Month {j+1}", months,
+                                index=0 if not edu.get("start_month") else months.index(edu["start_month"]),
+                                key=f"edu_start_month_{i}_{j}"
+                            )
+                            edu_start_year = st.selectbox(
+                                f"Start Year {j+1}", years,
+                                index=0 if not edu.get("start_year") else years.index(str(edu["start_year"])),
+                                key=f"edu_start_year_{i}_{j}"
+                            )
+
+                            # End Date
+                            edu_end_type = st.radio(
+                                f"End Date Type {j+1}", ["None", "Present", "Specific Month"],
+                                index=0 if not edu.get("end_type") else ["None", "Present", "Specific Month"].index(edu["end_type"]),
+                                key=f"edu_end_type_{i}_{j}"
+                            )
+                            if edu_end_type == "Specific Month":
+                                edu_end_month = st.selectbox(
+                                    f"End Month {j+1}", months,
+                                    index=0 if not edu.get("end_month") else months.index(edu["end_month"]),
+                                    key=f"edu_end_month_{i}_{j}"
+                                )
+                                edu_end_year = st.selectbox(
+                                    f"End Year {j+1}", years,
+                                    index=0 if not edu.get("end_year") else years.index(str(edu["end_year"])),
+                                    key=f"edu_end_year_{i}_{j}"
+                                )
+                            else:
+                                edu_end_month = edu_end_year = None
+
+                            # Save back to the dict
+                            edu["start_month"] = None if edu_start_month == "None" else edu_start_month
+                            edu["start_year"] = None if edu_start_year == "None" else edu_start_year
+                            edu["end_type"] = edu_end_type
+                            edu["end_month"] = None if (edu_end_type != "Specific Month" or edu_end_month == "None") else edu_end_month
+                            edu["end_year"] = None if (edu_end_type != "Specific Month" or edu_end_year == "None") else edu_end_year
                         with ecol4:
                             edu["details"] = st.text_input(f"Details {j+1}", edu.get("details", ""), key=f"edu_details_{i}_{j}")
                         with ecol5:
@@ -604,6 +683,7 @@ def main():
         "paragraph_alignment": "left"
     })
     # Live Preview
+    st.markdown('<a name="live-resume-preview"></a>', unsafe_allow_html=True)
     st.header("Live Resume Preview")
     sections_html = "".join(
         get_section_content(section["type"], section)
@@ -625,7 +705,7 @@ def main():
         st.subheader("PDF Layout Settings")
         if "pdf_settings" not in st.session_state.resume_data:
             st.session_state.resume_data["pdf_settings"] = {
-                "margins": {"top": "0mm", "right": "3mm", "bottom": "3mm", "left": "3mm"},
+                "margins": {"top": "0mm", "right": "8mm", "bottom": "8mm", "left": "8mm"},
                 "scale": 1.0,
                 "page_size": "A4",
                 "zoom": 1.15,
@@ -716,6 +796,7 @@ def main():
 
     # Save and Generate
     st.header("Save & Generate")
+    st.markdown('<a name="save-generate"></a>', unsafe_allow_html=True)
     email = st.text_input("Your Email (to save your resume)", "")
     
     if st.button("Save Resume") and email:
@@ -758,6 +839,15 @@ def main():
                 )
             else:
                 st.error(f"Failed to generate PDF. Error: {response.text}")
+
+    st.sidebar.title("Jump to Section")
+    st.sidebar.markdown("[Load Existing Resume](#load-resume)", unsafe_allow_html=True)
+    for i, section in enumerate(st.session_state.resume_data["sections"]):
+        section_title = section.get("title", f"Section {i+1}")
+        anchor = f"section_{i}"
+        st.sidebar.markdown(f"[{section_title}](#{anchor})", unsafe_allow_html=True)
+    st.sidebar.markdown("[Live Preview](#live-resume-preview)", unsafe_allow_html=True)
+    st.sidebar.markdown("[Save & Generate](#save-generate)", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

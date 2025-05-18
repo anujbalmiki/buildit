@@ -34,7 +34,7 @@ app.add_middleware(
 class PDFRequest(BaseModel):
     html: str
     # PDF customization options
-    margins: dict = {"top": "20mm", "right": "20mm", "bottom": "20mm", "left": "20mm"}
+    margins: dict = {"top": "8mm", "right": "8mm", "bottom": "8mm", "left": "8mm"}
     scale: float = 1.0
     page_size: str = "A4"
     zoom: float = 1.0
@@ -165,10 +165,19 @@ def generate_pdf_endpoint(req: PDFRequest):
     
     try:
         custom_css = f"""
+        .resume-container {{
+            margin: 0 !important;
+            padding: 0 !important;
+        }}
+        
+        h1 {{ 
+            margin: 0 !important;
+        }}
+        
         @page {{
             size: {req.page_size};
-            margin: {req.margins.get("top", "20mm")} {req.margins.get("right", "20mm")} 
-                    {req.margins.get("bottom", "20mm")} {req.margins.get("left", "20mm")};
+            margin: {req.margins.get("top", "8mm")} {req.margins.get("right", "8mm")} 
+                    {req.margins.get("bottom", "8mm")} {req.margins.get("left", "8mm")};
         }}
         body {{
             zoom: {req.zoom};
@@ -208,61 +217,6 @@ def extract_text_from_file(file: UploadFile):
     os.remove(tmp_path)
     return text
 
-def convert_flat_to_sections(parsed):
-    # Compose contact info
-    contact_info = " | ".join(filter(None, [parsed.get("email", ""), parsed.get("phone", "")]))
-    sections = []
-
-    # Skills
-    if parsed.get("skills"):
-        sections.append({
-            "type": "bullet_points",
-            "title": "Skills",
-            "items": parsed["skills"],
-            "title_formatting": {"alignment": "left", "font_size": 16, "font_weight": "bold"},
-            "content_formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}
-        })
-
-    # Education
-    if parsed.get("education"):
-        edu_items = []
-        for edu in parsed["education"]:
-            edu_str = ", ".join(filter(None, [edu.get("degree", ""), edu.get("institution", ""), edu.get("dates", "")]))
-            edu_items.append(edu_str)
-        sections.append({
-            "type": "bullet_points",
-            "title": "Education",
-            "items": edu_items,
-            "title_formatting": {"alignment": "left", "font_size": 16, "font_weight": "bold"},
-            "content_formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}
-        })
-
-    # Experience
-    if parsed.get("experience"):
-        exp_items = []
-        for exp in parsed["experience"]:
-            exp_items.append({
-                "position": exp.get("position", ""),
-                "company": exp.get("company", ""),
-                "date_range": exp.get("date_range", ""),
-                "bullet_points": exp.get("bullet_points", []),
-                "formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}
-            })
-        sections.append({
-            "type": "experience",
-            "title": "Experience",
-            "items": exp_items,
-            "title_formatting": {"alignment": "left", "font_size": 16, "font_weight": "bold"},
-            "content_formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}
-        })
-
-    return {
-        "name": parsed.get("name", "Full Name"),
-        "title": parsed.get("title", "Professional Title"),
-        "contact_info": contact_info,
-        "sections": sections
-    }
-
 @app.post("/parse-resume-ai")
 async def parse_resume_ai(file: UploadFile = File(...)):
     text = extract_text_from_file(file)
@@ -295,7 +249,11 @@ async def parse_resume_ai(file: UploadFile = File(...)):
         '     {\n'
         '       "position": "",\n'
         '       "company": "",\n'
-        '       "date_range": "",\n'
+        '       "start_month": "",\n'
+        '       "start_year": "",\n'
+        '       "end_month": "",\n'
+        '       "end_year": "",\n'
+        '       "end_type": "None", None if there is no end month or       "Present" if the end month is "Present" or "Specific Month" if there is a end month given\n'
         '       "bullet_points": []\n'
         '     }\n'
         '     - If the date is not in range then it should be original value.\n'
@@ -315,6 +273,26 @@ async def parse_resume_ai(file: UploadFile = File(...)):
         "8. Do not fabricate or infer experience/project entries. Only include what is explicitly mentioned.\n"
         "9. Maintain the natural order of content as it appears in the resume.\n"
         "10. Contact info must be compact, clear, and separated using ' | '.\n\n"
+        "11. Use \"experience\" type for education sections, and format them as:\n"
+        '     {\n'
+        '       "degree": "",\n'
+        '       "major": "",\n'
+        '       "institution": "",\n'
+        '       "start_month": "",\n'
+        '       "start_year": "",\n'
+        '       "end_month": "",\n'
+        '       "end_year": "",\n'
+        '       "end_type": "None", None if there is no end month or       "Present" if the end month is "Present" or "Specific Month" if there is a end month given\n'
+        '       "bullet_points": []\n'
+        '     }\n'
+        '     - If the date is not in range then it should be original value.\n'
+        '          e.g. 03/2022 - Present -> March 2022 - Present\n'
+        '          e.g. 03/2022 - 03/2023 -> March 2022 - March 2023\n'
+        '          e.g. 03/2022 - 2023 -> March 2022 - 2023\n'
+        '          e.g. 2022 - Present -> 2022 - Present\n'
+        '          e.g. 2022 - 2023 -> 2022 - 2023\n'
+        '          e.g. 03/2022 -> March 2022\n'
+        '     - If there is no date than it should be null\n'
         "Input resume:\n" + text
     )
     response = client.models.generate_content(
