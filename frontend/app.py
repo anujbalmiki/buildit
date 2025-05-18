@@ -7,6 +7,12 @@ import requests
 import streamlit as st
 from pymongo import MongoClient
 
+st.set_page_config(
+    page_title="Buildit - Resume Builder",
+    page_icon="📝",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 # Wake up the backend server
 @st.cache_resource
