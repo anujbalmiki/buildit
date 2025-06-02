@@ -25,7 +25,7 @@ app = FastAPI()
 # Allow CORS for local development and Streamlit Cloud
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production!
+    allow_origins=["https://buildit.streamlit.app", "https://buildit-production.up.railway.app/", "http://localhost:8501", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -305,6 +305,5 @@ async def parse_resume_ai(file: UploadFile = File(...)):
     # remove ``` from the end of the string
     if raw.endswith("```"):
         raw = raw[:-3]
-    print(raw)
     data = json.loads(raw)
     return data
