@@ -1,13 +1,13 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Slider } from "@/components/ui/slider"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { ChevronDown } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
 import type { ResumeData } from "@/types/resume"
+import { ChevronDown } from "lucide-react"
 
 interface FormattingOptionsProps {
   resumeData: ResumeData
@@ -235,7 +235,7 @@ export default function FormattingOptions({ resumeData, updateResumeData }: Form
                   onValueChange={([value]) => updatePDFSettings({ spacing: value })}
                   min={1.0}
                   max={2.0}
-                  step={0.1}
+                  step={0.05}
                   className="w-full"
                 />
               </div>

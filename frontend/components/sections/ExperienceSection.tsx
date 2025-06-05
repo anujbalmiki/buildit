@@ -1,10 +1,10 @@
 "use client"
 
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Trash2, Plus } from "lucide-react"
-import type { ResumeSection, ExperienceItem } from "@/types/resume"
+import type { ExperienceItem, ResumeSection } from "@/types/resume"
+import { Plus, Trash2 } from "lucide-react"
 
 interface ExperienceSectionProps {
   section: ResumeSection
