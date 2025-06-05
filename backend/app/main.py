@@ -7,6 +7,7 @@ import time
 from io import BytesIO
 
 import psutil
+from app.api.routes import pdf, resume
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +16,6 @@ from google import genai
 from pydantic import BaseModel
 # Import WeasyPrint instead of Playwright
 from weasyprint import CSS, HTML
-from app.api.routes import pdf, resume
 
 load_dotenv()
 
@@ -33,6 +33,7 @@ app.add_middleware(
         "http://127.0.0.1:3001",
         "https://buildit.streamlit.app",
         "https://buildit-production.up.railway.app/",
+        "https://buildit-lime.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
