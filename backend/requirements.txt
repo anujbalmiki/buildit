@@ -3,8 +3,11 @@ uvicorn
 python-multipart
 weasyprint
 google-generativeai
+google-genai
 python-dotenv
 pymongo
 pdfminer.six
+docx2txt
 python-docx
 psutil
+pydantic
