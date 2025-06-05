@@ -15,6 +15,7 @@ from google import genai
 from pydantic import BaseModel
 # Import WeasyPrint instead of Playwright
 from weasyprint import CSS, HTML
+from app.api.routes import pdf, resume
 
 load_dotenv()
 
@@ -25,11 +26,22 @@ app = FastAPI()
 # Allow CORS for local development and Streamlit Cloud
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://buildit.streamlit.app", "https://buildit-production.up.railway.app/", "http://localhost:8501", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000", 
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "https://buildit.streamlit.app",
+        "https://buildit-production.up.railway.app/",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(pdf.router, prefix="/api", tags=["pdf"])
+app.include_router(resume.router, prefix="/api", tags=["resume"])
 
 class PDFRequest(BaseModel):
     html: str
@@ -43,7 +55,7 @@ class PDFRequest(BaseModel):
 @app.get("/wake")
 async def wake():
     """Wake up the server (for Streamlit Cloud)"""
-    return JSONResponse(content={"message": "Server is awake!"})
+    return {"message": "Server is awake!"}
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -159,6 +171,7 @@ async def api_info():
 
 @app.post("/generate-pdf")
 def generate_pdf_endpoint(req: PDFRequest):
+    print(req)
     """Generate PDF from HTML content using WeasyPrint with customizable options"""
     # Create a BytesIO buffer to store the PDF
     pdf_buffer = BytesIO()

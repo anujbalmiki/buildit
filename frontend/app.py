@@ -5,7 +5,6 @@ from pathlib import Path
 
 import requests
 import streamlit as st
-from pymongo import MongoClient
 
 st.set_page_config(
     page_title="Buildit - Resume Builder",
@@ -25,15 +24,6 @@ def wake_backend():
 
 wake_backend()
     
-# MongoDB connection
-@st.cache_resource
-def init_connection():
-    return MongoClient(st.secrets["mongo"]["uri"])
-
-client = init_connection()
-db = client.buildit  # This connects to your 'buildit' database
-resumes = db.resumes  # This uses your 'resumes' collection
-
 # Resume template (based on your HTML)
 RESUME_TEMPLATE = """
     <!DOCTYPE html>
@@ -213,22 +203,65 @@ def get_section_content(section_type, section_data):
     return ""
 
 def load_resume(email):
-    resume = resumes.find_one({"email": email})
-    if resume:
-        return resume
-    return None
+    """Load resume from backend API"""
+    try:
+        response = requests.get(f"{st.secrets['backend']['url']}/api/resume/{email}")
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except Exception as e:
+        st.error(f"Error loading resume: {str(e)}")
+        return None
 
 def save_resume(email, resume_data):
-    resume_data = dict(resume_data)  # Make a copy to avoid mutating session state
-    resume_data["last_updated"] = datetime.now()
-    resume_data["email"] = email  # Ensure email is always present
-    if "_id" in resume_data:
-        del resume_data["_id"]  # Remove MongoDB's _id field before upsert
-    resumes.update_one(
-        {"email": email},         # Use email as the unique key
-        {"$set": resume_data},    # Set all fields from resume_data
-        upsert=True               # Insert if not exists, update if exists
-    )
+    """Save resume through backend API"""
+    try:
+        response = requests.post(
+            f"{st.secrets['backend']['url']}/api/resume/{email}",
+            json=resume_data
+        )
+        if response.status_code == 200:
+            st.success("Resume saved successfully!")
+        else:
+            st.error("Failed to save resume")
+    except Exception as e:
+        st.error(f"Error saving resume: {str(e)}")
+
+def parse_resume_file(file):
+    """Parse resume through backend API"""
+    try:
+        files = {"file": (file.name, file.getvalue())}
+        response = requests.post(
+            f"{st.secrets['backend']['url']}/api/parse-resume",
+            files=files
+        )
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error("Failed to parse resume")
+            return None
+    except Exception as e:
+        st.error(f"Error parsing resume: {str(e)}")
+        return None
+
+def generate_pdf(html_content, pdf_settings):
+    """Generate PDF through backend API"""
+    try:
+        response = requests.post(
+            f"{st.secrets['backend']['url']}/api/generate-pdf",
+            json={
+                "html": html_content,
+                **pdf_settings
+            }
+        )
+        if response.status_code == 200:
+            return response.content
+        else:
+            st.error("Failed to generate PDF")
+            return None
+    except Exception as e:
+        st.error(f"Error generating PDF: {str(e)}")
+        return None
 
 def format_date_range(exp):
     sm, sy = exp.get("start_month"), exp.get("start_year")
@@ -282,21 +315,6 @@ def main():
             existing_resume = load_resume(email_to_load)
             if existing_resume:
                 st.session_state.resume_data = existing_resume
-                rd = st.session_state.resume_data
-                rd.setdefault("formatting", {
-                    "name_alignment": "center",
-                    "name_weight": "bold",
-                    "section_title_alignment": "center",
-                    "paragraph_alignment": "left"
-                })
-                rd.setdefault("pdf_settings", {
-                    "margins": {"top": "0mm", "right": "8mm", "bottom": "8mm", "left": "8mm"},
-                    "scale": 1.0,
-                    "page_size": "A4",
-                    "zoom": 1.15,
-                    "spacing": 1.3
-                })
-                rd.setdefault("sections", [])
                 st.success("Resume loaded successfully!")
             else:
                 st.warning("No resume found for this email")
@@ -306,31 +324,10 @@ def main():
     uploaded_file = st.file_uploader("Upload your resume (PDF or DOCX)", type=["pdf", "docx"])
     if uploaded_file:
         with st.spinner("Parsing your resume..."):
-            api_url = st.secrets["backend"]["url"] + "/parse-resume-ai"
-            files = {"file": (uploaded_file.name, uploaded_file.getvalue())}
-            response = requests.post(api_url, files=files)
-            if response.status_code == 200:
-                parsed = response.json()
-                # Overwrite the entire resume_data for a clean autofill
+            parsed = parse_resume_file(uploaded_file)
+            if parsed:
                 st.session_state.resume_data = parsed
-                rd = st.session_state.resume_data
-                rd.setdefault("formatting", {
-                    "name_alignment": "center",
-                    "name_weight": "bold",
-                    "section_title_alignment": "center",
-                    "paragraph_alignment": "left"
-                })
-                rd.setdefault("pdf_settings", {
-                    "margins": {"top": "0mm", "right": "8mm", "bottom": "8mm", "left": "8mm"},
-                    "scale": 1.0,
-                    "page_size": "A4",
-                    "zoom": 1.15,
-                    "spacing": 1.3
-                })
-                rd.setdefault("sections", [])
                 st.success("Resume parsed and autofilled! Please review and edit as needed.")
-            else:
-                st.error("Failed to parse resume. Please check your file format.")
 
     # Basic Info
     st.header("Basic Information")
@@ -384,21 +381,26 @@ def main():
             new_section["items"] = [{
                 "position": "",
                 "company": "",
-                "date_range": None,
-                "bullet_points": [""],
-                "formatting": {
-                    "alignment": "left",
-                    "font_size": 14,
-                    "font_weight": "normal"
-                }
+                "start_month": None,
+                "start_year": None,
+                "end_type": "None",
+                "end_month": None,
+                "end_year": None,
+                "bullet_points": [""]
             }]
         elif new_section["type"] == "education":
             new_section["items"] = [{
                 "degree": "",
                 "institution": "",
-                "dates": None,
+                "start_month": None,
+                "start_year": None,
+                "end_type": "None",
+                "end_month": None,
+                "end_year": None,
                 "details": ""
             }]
+        if "sections" not in st.session_state.resume_data:
+            st.session_state.resume_data["sections"] = []
         st.session_state.resume_data["sections"].append(new_section)
     
     if "sections" not in st.session_state.resume_data or not isinstance(st.session_state.resume_data["sections"], list):
@@ -414,13 +416,11 @@ def main():
                 st.session_state.resume_data["sections"][i-1], st.session_state.resume_data["sections"][i] = \
                     st.session_state.resume_data["sections"][i], st.session_state.resume_data["sections"][i-1]
                 st.rerun()
-                return  # <-- Add this line
         with colC:
             if st.button("▼", key=f"move_down_{i}") and i < len(st.session_state.resume_data["sections"]) - 1:
                 st.session_state.resume_data["sections"][i+1], st.session_state.resume_data["sections"][i] = \
                     st.session_state.resume_data["sections"][i], st.session_state.resume_data["sections"][i+1]
                 st.rerun()
-                return  # <-- Add this line
         with colB:
             # Ensure formatting is a dict, not None
             if not isinstance(section.get("title_formatting"), dict):
@@ -461,10 +461,36 @@ def main():
                 
                 elif section["type"] == "experience":
                     if "items" not in section:
-                        section["items"] = [{"position": "", "company": "", "date_range": "", "bullet_points": [""]}]
+                        section["items"] = [{
+                            "position": "",
+                            "company": "",
+                            "start_month": None,
+                            "start_year": None,
+                            "end_type": "None",
+                            "end_month": None,
+                            "end_year": None,
+                            "bullet_points": [""]
+                        }]
                     
                     # --- REORDER EXPERIENCE ITEMS ---
                     for j, exp in enumerate(section["items"]):
+                        # Ensure exp is a dictionary with all required fields
+                        if not isinstance(exp, dict):
+                            exp = {
+                                "position": "",
+                                "company": "",
+                                "start_month": None,
+                                "start_year": None,
+                                "end_type": "None",
+                                "end_month": None,
+                                "end_year": None,
+                                "bullet_points": [""]
+                            }
+                            section["items"][j] = exp
+                        # Ensure bullet_points exists
+                        if "bullet_points" not in exp:
+                            exp["bullet_points"] = [""]
+
                         ecol1, ecol2, ecol3 = st.columns([0.05, 0.9, 0.05])
                         with ecol1:
                             if st.button("▲", key=f"exp_up_{i}_{j}") and j > 0:
@@ -475,10 +501,8 @@ def main():
                                 section["items"][j+1], section["items"][j] = section["items"][j], section["items"][j+1]
                                 st.rerun()
                         with ecol2:
-                            exp["date_range"] = exp.get("date_range") or ""
                             st.subheader(f"Experience {j+1}")
                             exp["position"] = st.text_input(f"Position {j+1}", exp.get("position", ""), key=f"position_{i}_{j}")
-                            # Instead of columns, just stack the inputs vertically:
                             exp["company"] = st.text_input(f"Company {j+1}", exp.get("company", ""), key=f"company_{i}_{j}")
                             months = ["None"] + list(calendar.month_name)[1:]
                             years = ["None"] + [str(y) for y in range(1950, 2101)]
@@ -525,7 +549,6 @@ def main():
                         st.write("Bullet Points:")
                         # --- REORDER EXPERIENCE BULLETS ---
                         for k, bullet in enumerate(exp["bullet_points"]):
-                            # Avoid nested columns inside columns (Streamlit limitation)
                             st.markdown(f"**Bullet {k+1}**")
                             bpcol = st.columns([0.1, 0.7, 0.1, 0.1])
                             with bpcol[0]:
@@ -554,13 +577,12 @@ def main():
                         section["items"].append({
                             "position": "",
                             "company": "",
-                            "date_range": "",
-                            "bullet_points": [""],
-                            "formatting": {
-                                "alignment": "left",
-                                "font_size": 14,
-                                "font_weight": "normal"
-                            }
+                            "start_month": None,
+                            "start_year": None,
+                            "end_type": "None",
+                            "end_month": None,
+                            "end_year": None,
+                            "bullet_points": [""]
                         })
                         st.rerun()
                 
@@ -807,44 +829,17 @@ def main():
     
     if st.button("Save Resume") and email:
         save_resume(email, st.session_state.resume_data)
-        st.success("Resume saved successfully!")
     
     if st.button("Generate PDF"):
-        # Build HTML content
-        sections_html = "".join(
-            get_section_content(section["type"], section)
-            for section in st.session_state.resume_data["sections"]
-        )
-        contact_info_html = make_links_clickable(st.session_state.resume_data["contact_info"])
-
-        html_content = RESUME_TEMPLATE.format(
-            name=st.session_state.resume_data["name"],
-            title=st.session_state.resume_data["title"],
-            contact_info=contact_info_html,  # Use processed contact info
-            sections=sections_html,
-            **st.session_state.resume_data["formatting"]
-        )
-        
-        # Call FastAPI backend to generate PDF with custom settings
         with st.spinner("Generating PDF..."):
-            api_url = st.secrets["backend"]["url"] + "/generate-pdf"  # Use the secret for the API URL
-            
-            # Prepare the request with PDF settings
-            pdf_request = {
-                "html": html_content,
-                **st.session_state.resume_data.get("pdf_settings", {})
-            }
-            
-            response = requests.post(api_url, json=pdf_request)
-            if response.status_code == 200:
+            pdf_content = generate_pdf(html_content, st.session_state.resume_data.get("pdf_settings", {}))
+            if pdf_content:
                 st.download_button(
                     label="Download PDF",
-                    data=response.content,
+                    data=pdf_content,
                     file_name=f"{st.session_state.resume_data['name'].replace(' ', '_')}_Resume.pdf",
                     mime="application/pdf"
                 )
-            else:
-                st.error(f"Failed to generate PDF. Error: {response.text}")
 
     st.sidebar.title("Jump to Section")
     st.sidebar.markdown("[Load Existing Resume](#load-resume)", unsafe_allow_html=True)
