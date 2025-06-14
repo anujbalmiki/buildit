@@ -7,7 +7,8 @@ import time
 from io import BytesIO
 
 import psutil
-from app.api.routes import pdf, resume
+from app.api.routes import (cover_letter, pdf, resume, rewrite_resume,
+                            rewrite_section)
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,6 +44,9 @@ app.add_middleware(
 # Include routers
 app.include_router(pdf.router, prefix="/api", tags=["pdf"])
 app.include_router(resume.router, prefix="/api", tags=["resume"])
+app.include_router(rewrite_resume.router, prefix="/api", tags=["rewrite_resume"])
+app.include_router(rewrite_section.router, prefix="/api", tags=["rewrite_section"])
+app.include_router(cover_letter.router, prefix="/api", tags=["cover_letter"])
 
 class PDFRequest(BaseModel):
     html: str
@@ -118,6 +122,7 @@ async def root():
                 <li><a href="/info">/info</a> - API information</li>
                 <li><a href="/generate-pdf">/generate-pdf</a> - Generate PDF from HTML</li>
                 <li><a href="/parse-resume-ai">/parse-resume-ai</a> - Parse resume using AI</li>
+                <li><a href="/rewrite-resume-ai">/rewrite-resume-ai</a> - Rewrite resume to match job description</li>
             </ul>
         </div>
     </body>
@@ -317,6 +322,30 @@ async def parse_resume_ai(file: UploadFile = File(...)):
     raw = response.text.strip()
     raw = raw[raw.index("{"):]  # Extract JSON part
     # remove ``` from the end of the string
+    if raw.endswith("```"):
+        raw = raw[:-3]
+    data = json.loads(raw)
+    return data
+
+from fastapi import Body
+
+
+@app.post("/rewrite-resume-ai")
+async def rewrite_resume_ai(jd: str = Body(...), resume: dict = Body(...)):
+    prompt = (
+        "Rewrite the following resume to best match this job description. "
+        "Keep it truthful, but optimize for keywords, skills, and achievements relevant to the JD. "
+        "Output in the same JSON structure as before.\n\n"
+        f"Job Description:\n{jd}\n\nResume:\n{resume}"
+    )
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+    )
+    import json
+    raw = response.text.strip()
+    raw = raw[raw.index("{"):]
     if raw.endswith("```"):
         raw = raw[:-3]
     data = json.loads(raw)
