@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import type { ResumeData, ResumeSection } from "@/types/resume"
@@ -31,12 +32,10 @@ export default function SectionManager({ resumeData, updateResumeData }: Section
   const [sectionRewriteError, setSectionRewriteError] = useState<string | null>(null)
   const [useJDForRewrite, setUseJDForRewrite] = useState(true)
   const [useJDForSectionRewrite, setUseJDForSectionRewrite] = useState(true)
-  const [coverLetterModalOpen, setCoverLetterModalOpen] = useState(false)
   const [coverLetterJD, setCoverLetterJD] = useState("")
   const [coverLetter, setCoverLetter] = useState("")
   const [loadingCoverLetter, setLoadingCoverLetter] = useState(false)
   const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
-  const [previewMode, setPreviewMode] = useState<"resume" | "coverLetter">("resume");
 
   const sectionTypes = {
     "": "Select section type",
@@ -200,8 +199,8 @@ export default function SectionManager({ resumeData, updateResumeData }: Section
 
   // Call backend to generate cover letter
   const handleGenerateCoverLetter = async () => {
-    setLoadingCoverLetter(true)
-    setCoverLetterError(null)
+    setLoadingCoverLetter(true);
+    setCoverLetterError(null);
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/generate-cover-letter-ai`, {
         method: "POST",
@@ -210,24 +209,34 @@ export default function SectionManager({ resumeData, updateResumeData }: Section
           jd: coverLetterJD,
           resume: resumeData,
         }),
-      })
-      if (!res.ok) throw new Error("Failed to generate cover letter")
-      const data = await res.json()
-      setCoverLetter(data.coverLetter)
-      setCoverLetterModalOpen(false)
-      setCoverLetterJD("")
+      });
+      if (!res.ok) throw new Error("Failed to generate cover letter");
+      const data = await res.json();
+      setCoverLetter(data.cover_letter || data.coverLetter || ""); // handle both snake_case and camelCase
     } catch (err: any) {
-      setCoverLetterError(err.message || "Unknown error")
+      setCoverLetterError(err.message || "Unknown error");
     } finally {
-      setLoadingCoverLetter(false)
+      setLoadingCoverLetter(false);
     }
   }
 
   const handleDownloadCoverLetter = () => {
     import("jspdf").then(jsPDF => {
-      const doc = new jsPDF.jsPDF();
+      const doc = new jsPDF.jsPDF({
+        unit: "pt",
+        format: "a4"
+      });
+      const marginLeft = 40;
+      const marginTop = 60;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const maxWidth = pageWidth - marginLeft * 2;
+
       doc.setFontSize(12);
-      doc.text(coverLetter, 10, 20);
+      doc.text(coverLetter, marginLeft, marginTop, {
+        maxWidth: maxWidth,
+        align: "left"
+      });
+
       doc.save("cover_letter.pdf");
     });
   }
@@ -242,7 +251,7 @@ export default function SectionManager({ resumeData, updateResumeData }: Section
           </DialogHeader>
           <Textarea
             value={jobDescription}
-            onChange={e => setJobDescription(e.target.value)}
+            onChange={e => {setJobDescription(e.target.value), setCoverLetterJD(e.target.value), setSectionJobDescription(e.target.value)}}
             placeholder="Paste the job description here (optional)..."
             rows={8}
           />
@@ -277,7 +286,7 @@ export default function SectionManager({ resumeData, updateResumeData }: Section
           </DialogHeader>
           <Textarea
             value={sectionJobDescription}
-            onChange={e => setSectionJobDescription(e.target.value)}
+            onChange={e => {setSectionJobDescription(e.target.value), setJobDescription(e.target.value), setCoverLetterJD(e.target.value)}}
             placeholder="Paste the job description for this section (optional)..."
             rows={8}
           />
@@ -304,59 +313,6 @@ export default function SectionManager({ resumeData, updateResumeData }: Section
         </DialogContent>
       </Dialog>
 
-      {/* Cover Letter Modal */}
-      <Dialog open={coverLetterModalOpen} onOpenChange={setCoverLetterModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Generate Cover Letter</DialogTitle>
-          </DialogHeader>
-          {!coverLetter && (
-            <>
-              <Textarea
-                value={coverLetterJD}
-                onChange={e => setCoverLetterJD(e.target.value)}
-                placeholder="Paste the job description for the cover letter here..."
-                rows={8}
-              />
-              {coverLetterError && <div className="text-red-500 text-sm">{coverLetterError}</div>}
-              <DialogFooter>
-                <Button
-                  onClick={handleGenerateCoverLetter}
-                  disabled={loadingCoverLetter}
-                >
-                  {loadingCoverLetter && <Loader2 className="animate-spin w-4 h-4 mr-2" />}
-                  Generate Cover Letter
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-          {coverLetter && (
-            <>
-              <label className="block mb-2 font-semibold">Your Cover Letter (editable):</label>
-              <Textarea
-                value={coverLetter}
-                onChange={e => setCoverLetter(e.target.value)}
-                rows={12}
-              />
-              <DialogFooter>
-                <Button onClick={handleDownloadCoverLetter}>
-                  Download as PDF
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setCoverLetter("");
-                    setCoverLetterJD("");
-                  }}
-                >
-                  Generate Another
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
       {/* Main Section Manager UI */}
       <Card>
         <CardHeader>
@@ -369,14 +325,6 @@ export default function SectionManager({ resumeData, updateResumeData }: Section
               onClick={() => setJdModalOpen(true)}
             >
               Paste JD & Rewrite Resume
-            </Button>
-            <Button
-              className="ml-2"
-              variant="outline"
-              size="sm"
-              onClick={() => setCoverLetterModalOpen(true)}
-            >
-              Generate Cover Letter
             </Button>
           </CardTitle>
         </CardHeader>
@@ -439,6 +387,50 @@ export default function SectionManager({ resumeData, updateResumeData }: Section
           </div>
         </CardContent>
       </Card>
+
+      {/* Collapsible Cover Letter Section */}
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <Card className="cursor-pointer hover:bg-gray-50 mt-6">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-lg">Cover Letter</CardTitle>
+              <ChevronDown className="h-4 w-4" />
+            </CardHeader>
+          </Card>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              <Textarea
+                value={coverLetterJD}
+                onChange={e => {setCoverLetterJD(e.target.value), setJobDescription(e.target.value), setSectionJobDescription(e.target.value)}}
+                placeholder="Paste the job description for the cover letter here..."
+                rows={6}
+              />
+              <Button
+                onClick={handleGenerateCoverLetter}
+                disabled={loadingCoverLetter}
+              >
+                {loadingCoverLetter ? "Generating..." : "Generate Cover Letter"}
+              </Button>
+              {coverLetterError && <div className="text-red-500 text-sm">{coverLetterError}</div>}
+              <Textarea
+                value={coverLetter}
+                onChange={e => setCoverLetter(e.target.value)}
+                rows={12}
+                className="mb-2"
+                placeholder="Your generated cover letter will appear here..."
+              />
+              <Button
+                onClick={handleDownloadCoverLetter}
+                disabled={!coverLetter}
+              >
+                Download as PDF
+              </Button>
+            </CardContent>
+          </Card>
+        </CollapsibleContent>
+      </Collapsible>
     </>
   )
 }
