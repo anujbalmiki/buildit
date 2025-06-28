@@ -35,6 +35,7 @@ app.add_middleware(
         "https://buildit.streamlit.app",
         "https://buildit-production.up.railway.app/",
         "https://buildit-lime.vercel.app",
+        "https://a8a3cc7ae0e34c7e94a00d85f9e28f0e-02048d2154dd489e98da85a6c.fly.dev",
     ],
     allow_credentials=True,
     allow_methods=["*"],
