@@ -7,38 +7,57 @@ A modern web application for building and parsing resumes using AI.
 ```
 buildit/
 ├── backend/
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py              # FastAPI application entry point
-│   │   ├── database.py          # MongoDB database operations
-│   │   ├── api/
-│   │   │   ├── __init__.py
-│   │   │   ├── routes/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── pdf.py       # PDF generation endpoints
-│   │   │   │   └── resume.py    # Resume parsing endpoints
+│   ├── .env
+│   ├── Dockerfile
 │   ├── requirements.txt
-│   └── Dockerfile
+│   └── app/
+│       ├── database.py
+│       ├── main.py                  # FastAPI application entry point
+│       ├── pdf.py
+│       ├── resume_parser.py
+│       └── api/
+│           └── routes/
+│               ├── __init__.py
+│               ├── cover_letter.py      # Cover letter endpoints
+│               ├── pdf.py              # PDF generation endpoints
+│               ├── resume.py           # Resume parsing endpoints
+│               ├── rewrite_resume.py   # Resume rewriting endpoints
+│               └── rewrite_section.py  # Section rewriting endpoints
 ├── frontend/
-│   ├── app/
-│   │   ├── page.tsx            # Main application page
-│   │   ├── layout.tsx          # Root layout component
-│   │   └── globals.css         # Global styles
-│   ├── components/
-│   │   ├── ui/                 # Reusable UI components
-│   │   ├── BasicInfoForm.tsx   # Basic info form component
-│   │   ├── FileUpload.tsx      # File upload component
-│   │   ├── FormattingOptions.tsx # Resume formatting options
-│   │   ├── LoadResume.tsx      # Load saved resume component
-│   │   ├── ResumePreview.tsx   # Live resume preview
-│   │   └── SaveGenerate.tsx    # Save and generate PDF component
-|   |-- lib/
-|   |   |-- utils.ts
-│   ├── types/
-│   │   └── resume.ts           # TypeScript types
+│   ├── .env.local
+│   ├── next.config.mjs
 │   ├── package.json
-│   └── next.config.mjs
+│   ├── pnpm-lock.yaml
+│   ├── postcss.config.mjs
+│   ├── tailwind.config.ts
+│   ├── tsconfig.json
+│   ├── app/
+│   │   ├── page.tsx                  # Main application page
+│   │   ├── layout.tsx                # Root layout component
+│   │   └── globals.css               # Global styles
+│   ├── components/
+│   │   ├── ui/                       # Reusable UI components
+│   │   ├── BasicInfoForm.tsx         # Basic info form component
+│   │   ├── FileUpload.tsx            # File upload component
+│   │   ├── FormattingOptions.tsx     # Resume formatting options
+│   │   ├── LoadResume.tsx            # Load saved resume component
+│   │   ├── ResumePreview.tsx         # Live resume preview
+│   │   ├── SaveGenerate.tsx          # Save and generate PDF component
+│   │   └── SectionManager.tsx        # Resume sections manager
+│   ├── hooks/
+│   ├── lib/
+│   │   └── utils.ts
+│   ├── public/
+│   ├── styles/
+│   ├── types/
+│   │   └── resume.ts                 # TypeScript types
+├── legacy-frontend/
+│   ├── app.py
+│   ├── requirements.txt
+│   └── .streamlit/
+│       └── secrets.toml
 ├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
