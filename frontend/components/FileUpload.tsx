@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload } from "lucide-react"
+import { Loader2, Upload } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { ResumeData } from "@/types/resume"
 
@@ -16,6 +16,7 @@ interface FileUploadProps {
 
 export default function FileUpload({ onResumeLoaded, setIsLoading }: FileUploadProps) {
   const [dragActive, setDragActive] = useState(false)
+  const [parsing, setParsing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
@@ -36,6 +37,7 @@ export default function FileUpload({ onResumeLoaded, setIsLoading }: FileUploadP
       return
     }
 
+    setParsing(true)
     setIsLoading(true)
     try {
       const formData = new FormData()
@@ -63,6 +65,7 @@ export default function FileUpload({ onResumeLoaded, setIsLoading }: FileUploadP
         variant: "destructive",
       })
     } finally {
+      setParsing(false)
       setIsLoading(false)
     }
   }
@@ -70,6 +73,7 @@ export default function FileUpload({ onResumeLoaded, setIsLoading }: FileUploadP
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    if (parsing) return
     if (e.type === "dragenter" || e.type === "dragover") {
       setDragActive(true)
     } else if (e.type === "dragleave") {
@@ -81,6 +85,7 @@ export default function FileUpload({ onResumeLoaded, setIsLoading }: FileUploadP
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
+    if (parsing) return
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFiles(e.dataTransfer.files)
     }
@@ -101,18 +106,32 @@ export default function FileUpload({ onResumeLoaded, setIsLoading }: FileUploadP
       <CardContent>
         <div
           className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-            dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300"
+            parsing ? "border-primary bg-accent/50" : dragActive ? "border-primary bg-accent" : "border-border"
           }`}
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
         >
-          <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <p className="text-lg font-medium text-gray-900 mb-2">Upload your resume</p>
-          <p className="text-sm text-gray-500 mb-4">Drag and drop your PDF or DOCX file here, or click to browse</p>
-          <Button onClick={() => fileInputRef.current?.click()}>Choose File</Button>
-          <input ref={fileInputRef} type="file" accept=".pdf,.docx" onChange={handleChange} className="hidden" />
+          {parsing ? (
+            <div aria-live="polite">
+              <Loader2 className="mx-auto h-12 w-12 text-primary mb-4 animate-spin" />
+              <p className="text-lg font-medium text-foreground mb-1">Parsing your resume with AI…</p>
+              <p className="text-sm text-muted-foreground">
+                Reading the file and structuring your details. This can take a few seconds.
+              </p>
+            </div>
+          ) : (
+            <>
+              <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-lg font-medium text-foreground mb-2">Upload your resume</p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Drag and drop your PDF or DOCX file here, or click to browse
+              </p>
+              <Button onClick={() => fileInputRef.current?.click()}>Choose File</Button>
+              <input ref={fileInputRef} type="file" accept=".pdf,.docx" onChange={handleChange} className="hidden" />
+            </>
+          )}
         </div>
       </CardContent>
     </Card>

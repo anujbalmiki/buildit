@@ -1,13 +1,9 @@
-import os
+from fastapi import APIRouter, Body, HTTPException
 
-from app.database import db
-from fastapi import APIRouter, Body
-from google import genai
+from app.llm import generate_json
 
 router = APIRouter()
 
-# Initialize Google AI
-client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
 @router.post("/rewrite-resume-ai")
 async def rewrite_resume_ai(jd: str = Body(...), resume: dict = Body(...)):
@@ -17,15 +13,7 @@ async def rewrite_resume_ai(jd: str = Body(...), resume: dict = Body(...)):
         "Output in the same JSON structure as before keeping the formatting same as before.\n\n"
         f"Job Description:\n{jd}\n\nResume:\n{resume}"
     )
-    
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-    )
-    import json
-    raw = response.text.strip()
-    raw = raw[raw.index("{"):]
-    if raw.endswith("```"):
-        raw = raw[:-3]
-    data = json.loads(raw)
-    return data
+    try:
+        return generate_json(prompt)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=502, detail=f"Failed to rewrite resume: {e}")

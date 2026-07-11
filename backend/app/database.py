@@ -1,16 +1,33 @@
-from pymongo import MongoClient
-from datetime import datetime
 import os
-from dotenv import load_dotenv
+from datetime import datetime
+
 from bson import ObjectId
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from pymongo.collection import Collection
 
 load_dotenv()
 
+
 class Database:
+    """Lazy MongoDB wrapper.
+
+    The connection is created on first use so the app can start (and serve
+    endpoints that don't touch the DB) even when MONGODB_URI is unset.
+    """
+
     def __init__(self):
-        self.client = MongoClient(os.environ["MONGODB_URI"])
-        self.db = self.client.buildit
-        self.resumes = self.db.resumes
+        self._client: MongoClient | None = None
+        self._resumes: Collection | None = None
+
+    def _collection(self) -> Collection:
+        if self._resumes is None:
+            uri = os.getenv("MONGODB_URI")
+            if not uri:
+                raise RuntimeError("MONGODB_URI is not set. Add it to backend/.env.")
+            self._client = MongoClient(uri)
+            self._resumes = self._client.buildit.resumes
+        return self._resumes
 
     def _convert_objectid(self, data):
         """Convert ObjectId to string in the document"""
@@ -29,7 +46,7 @@ class Database:
         return data
 
     def get_resume(self, email: str):
-        resume = self.resumes.find_one({"email": email})
+        resume = self._collection().find_one({"email": email})
         if resume:
             return self._convert_objectid(resume)
         return None
@@ -39,12 +56,12 @@ class Database:
         resume_data["email"] = email
         if "_id" in resume_data:
             del resume_data["_id"]
-        
-        result = self.resumes.update_one(
+
+        return self._collection().update_one(
             {"email": email},
             {"$set": resume_data},
-            upsert=True
+            upsert=True,
         )
-        return result
 
-db = Database() 
+
+db = Database()

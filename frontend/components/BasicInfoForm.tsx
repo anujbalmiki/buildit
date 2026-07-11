@@ -47,7 +47,7 @@ export default function BasicInfoForm({ resumeData, updateResumeData }: BasicInf
             placeholder="Separate items with '|' (e.g., email@example.com | (555) 123-4567 | City, State)"
             rows={3}
           />
-          <p className="text-sm text-gray-500">Separate contact items with '|' for proper formatting</p>
+          <p className="text-sm text-muted-foreground">Separate contact items with '|' for proper formatting</p>
         </div>
       </CardContent>
     </Card>

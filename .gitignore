@@ -141,6 +141,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# WeasyPrint / fontconfig cache accidentally written under backend/
+backend/C/
+
 # Spyder project settings
 .spyderproject
 .spyproject

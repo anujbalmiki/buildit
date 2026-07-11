@@ -98,6 +98,11 @@ export default function ResumePreview({ resumeData }: ResumePreviewProps) {
       ul {
         margin-top: 7px;
         padding-left: 20px;
+        list-style-type: disc;
+        list-style-position: outside;
+      }
+      li {
+        display: list-item;
       }
       p {
         margin: 6px 0;

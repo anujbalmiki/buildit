@@ -1,13 +1,11 @@
 "use client"
 
-import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Download, Save } from "lucide-react"
+import { Download, LogIn, Save } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { ResumeData } from "@/types/resume"
+import { signIn, useSession } from "next-auth/react"
 
 interface SaveGenerateProps {
   resumeData: ResumeData
@@ -16,22 +14,16 @@ interface SaveGenerateProps {
 }
 
 export default function SaveGenerate({ resumeData, isLoading, setIsLoading }: SaveGenerateProps) {
-  const [email, setEmail] = useState("")
+  const { data: session } = useSession()
   const { toast } = useToast()
+  const email = session?.user?.email
 
   const saveResume = async () => {
-    if (!email) {
-      toast({
-        title: "Email required",
-        description: "Please enter your email address",
-        variant: "destructive",
-      })
-      return
-    }
+    if (!email) return
 
     setIsLoading(true)
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/resume/${email}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/resume/${encodeURIComponent(email)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -261,22 +253,24 @@ export default function SaveGenerate({ resumeData, isLoading, setIsLoading }: Sa
         <CardTitle>Save & Generate</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="save-email">Your Email (to save your resume)</Label>
-          <Input
-            id="save-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email address"
-          />
-        </div>
+        <p className="text-sm text-muted-foreground">
+          {email
+            ? `Saving to your account (${email}).`
+            : "Generate and download a PDF anytime. Sign in to also save your resume to your account."}
+        </p>
 
         <div className="flex gap-4">
-          <Button onClick={saveResume} disabled={isLoading || !email} className="flex-1">
-            <Save className="w-4 h-4 mr-2" />
-            {isLoading ? "Saving..." : "Save Resume"}
-          </Button>
+          {email ? (
+            <Button onClick={saveResume} disabled={isLoading} className="flex-1">
+              <Save className="w-4 h-4 mr-2" />
+              {isLoading ? "Saving..." : "Save Resume"}
+            </Button>
+          ) : (
+            <Button onClick={() => signIn("google")} variant="secondary" className="flex-1">
+              <LogIn className="w-4 h-4 mr-2" />
+              Sign in to Save
+            </Button>
+          )}
 
           <Button onClick={generatePDF} disabled={isLoading} variant="outline" className="flex-1">
             <Download className="w-4 h-4 mr-2" />

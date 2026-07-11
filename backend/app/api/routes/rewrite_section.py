@@ -1,13 +1,9 @@
-import os
+from fastapi import APIRouter, Body, HTTPException
 
-from app.database import db
-from fastapi import APIRouter, Body
-from google import genai
+from app.llm import generate_json
 
 router = APIRouter()
 
-# Initialize Google AI
-client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
 @router.post("/rewrite-section-ai")
 async def rewrite_section_ai(jd: str = Body(...), section: dict = Body(...)):
@@ -26,14 +22,7 @@ async def rewrite_section_ai(jd: str = Body(...), section: dict = Body(...)):
             "Return ONLY the improved section as a single JSON object, with no explanation or extra text.\n\n"
             f"Section:\n{section}"
         )
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-    )
-    import json
-    raw = response.text.strip()
-    raw = raw[raw.index("{"):]
-    if raw.endswith("```"):
-        raw = raw[:-3]
-    data = json.loads(raw)
-    return data
+    try:
+        return generate_json(prompt)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=502, detail=f"Failed to rewrite section: {e}")
