@@ -5,10 +5,11 @@ export interface ResumeData {
   sections: ResumeSection[]
   formatting: FormattingOptions
   pdf_settings: PDFSettings
+  template?: string
 }
 
 export interface ResumeSection {
-  type: "paragraph" | "bullet_points" | "experience" | "education"
+  type: "paragraph" | "bullet_points" | "experience" | "education" | "project"
   title: string
   content?: string
   items?: any[]
@@ -64,6 +65,19 @@ export interface EducationItem {
   details: string
 }
 
+export interface ProjectItem {
+  name: string
+  tech: string
+  github: string
+  link: string
+  start_month: string
+  start_year: string
+  end_type: "None" | "Present" | "Specific Month"
+  end_month: string
+  end_year: string
+  bullet_points: string[]
+}
+
 export const defaultResumeData: ResumeData = {
   name: "Full Name",
   title: "Professional Title",
@@ -87,4 +101,5 @@ export const defaultResumeData: ResumeData = {
     zoom: 1.15,
     spacing: 1.3,
   },
+  template: "original",
 }

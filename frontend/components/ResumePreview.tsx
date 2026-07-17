@@ -1,130 +1,145 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { fetchResumePdfBlobUrl } from "@/lib/resumeExport"
+import { renderResumeHtml } from "@/lib/resumeTemplates"
 import type { ResumeData } from "@/types/resume"
+import { AlertTriangle, Loader2 } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 
 interface ResumePreviewProps {
   resumeData: ResumeData
+  template?: string
 }
 
-export default function ResumePreview({ resumeData }: ResumePreviewProps) {
-  const formatDateRange = (item: any) => {
-    const { start_month, start_year, end_type, end_month, end_year } = item
+const PX_PER_MM = 96 / 25.4
+const PAGE_MM: Record<string, { w: number; h: number }> = {
+  A4: { w: 210, h: 297 },
+  Letter: { w: 216, h: 279 },
+  Legal: { w: 216, h: 356 },
+}
 
-    if (!start_year || start_year === "" || start_year === "None") return ""
+function parseMm(v?: string): number {
+  const n = parseFloat(v || "")
+  return Number.isNaN(n) ? 0 : n
+}
 
-    const start = start_month && start_month !== "None" ? `${start_month} ${start_year}` : start_year
-
-    if (end_type === "Present") {
-      return `${start} - Present`
-    } else if (end_type === "Specific Month" && end_year && end_year !== "" && end_year !== "None") {
-      const end = end_month && end_month !== "None" ? `${end_month} ${end_year}` : end_year
-      return `${start} - ${end}`
-    }
-
-    return start
+// Physical printable width (mm) matching the backend's @page geometry, so the
+// fast preview wraps text roughly like the real PDF does.
+function pageGeometry(data: ResumeData) {
+  const page = PAGE_MM[data.pdf_settings?.page_size] || PAGE_MM.A4
+  const m = data.pdf_settings?.margins || ({} as ResumeData["pdf_settings"]["margins"])
+  return {
+    widthMm: page.w,
+    padding: `${m.top || "0mm"} ${m.right || "8mm"} ${m.bottom || "8mm"} ${m.left || "8mm"}`,
+    zoom: data.pdf_settings?.zoom ?? 1,
   }
+}
 
-  const makeLinksClickable = (text: string) => {
-    if (!text) return ""
-    const urlRegex = /(https?:\/\/[^\s|]+)/g
-    return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
-  }
+type Mode = "pdf" | "fast"
 
-  const getSectionHTML = (section: any) => {
-    const titleStyle = `text-align:${section.title_formatting?.alignment || "left"};font-size:${section.title_formatting?.font_size || 16}px;font-weight:${section.title_formatting?.font_weight || "bold"};`
-    const contentStyle = `text-align:${section.content_formatting?.alignment || "left"};font-size:${section.content_formatting?.font_size || 14}px;font-weight:${section.content_formatting?.font_weight || "normal"};`
+export default function ResumePreview({ resumeData, template }: ResumePreviewProps) {
+  const [mode, setMode] = useState<Mode>("pdf")
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(false)
+  const urlRef = useRef<string | null>(null)
 
-    switch (section.type) {
-      case "paragraph":
-        return `<div class="section-title" style="${titleStyle}">${section.title || ""}</div><p style="${contentStyle}">${section.content || ""}</p>`
-
-      case "bullet_points":
-        const items = (section.items || [])
-          .map((item: string) => `<li style="${contentStyle}">${item || ""}</li>`)
-          .join("")
-        return `<div class="section-title" style="${titleStyle}">${section.title || ""}</div><ul>${items}</ul>`
-
-      case "experience":
-        const expItems = (section.items || [])
-          .map((exp: any) => {
-            const bullets = (exp.bullet_points || [])
-              .map((bullet: string) => `<li style="${contentStyle}">${bullet || ""}</li>`)
-              .join("")
-            const dateHtml = formatDateRange(exp) ? `<span style="float:right;">${formatDateRange(exp)}</span>` : ""
-            const companyHtml = exp.company ? `, ${exp.company}` : ""
-            return `<p style="${contentStyle}"><strong>${exp.position || ""}</strong>${companyHtml} ${dateHtml}</p><ul>${bullets}</ul>`
-          })
-          .join("")
-        return `<div class="section-title" style="${titleStyle}">${section.title || ""}</div>${expItems}`
-
-      case "education":
-        const eduItems = (section.items || [])
-          .map((edu: any) => {
-            const dateHtml = formatDateRange(edu) ? `<span style="float:right;">${formatDateRange(edu)}</span>` : ""
-            const detailsHtml = edu.details ? `<p style="${contentStyle}">${edu.details}</p>` : ""
-            return `<p style="${contentStyle}"><strong>${edu.degree || ""}</strong>, ${edu.institution || ""} ${dateHtml}</p>${detailsHtml}`
-          })
-          .join("")
-        return `<div class="section-title" style="${titleStyle}">${section.title || ""}</div>${eduItems}`
-
-      default:
-        return ""
-    }
-  }
-
-  const sectionsHTML = (resumeData.sections || []).map((section) => getSectionHTML(section)).join("")
-  const contactInfoHTML = makeLinksClickable(resumeData.contact_info || "")
-
-  const resumeHTML = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.3; color: #000; background: #fff; padding: 0; margin: 0;">
-      <div style="max-width: 800px; margin: auto; padding: 0 25px 25px 25px; border: none;">
-        <h1 style="text-align: ${resumeData.formatting?.name_alignment || "center"}; margin-bottom: 5px; font-size: 24px; font-weight: ${resumeData.formatting?.name_weight || "bold"};">${resumeData.name || ""}</h1>
-        <h2 style="text-align: ${resumeData.formatting?.name_alignment || "center"}; font-size: 16px; font-weight: normal; margin-top: 0;">${resumeData.title || ""}</h2>
-        <div style="text-align: center; font-size: 14px;">
-          ${contactInfoHTML}
-        </div>
-        ${sectionsHTML}
-      </div>
-    </div>
-    <style>
-      .section-title {
-        font-weight: bold;
-        margin-top: 20px;
-        border-bottom: 1px solid #000;
-        padding-bottom: 3px;
-        text-align: ${resumeData.formatting?.section_title_alignment || "center"};
+  // Debounced exact-PDF generation — the true, WYSIWYG preview.
+  useEffect(() => {
+    if (mode !== "pdf") return
+    setLoading(true)
+    setError(false)
+    const timer = setTimeout(async () => {
+      try {
+        const url = await fetchResumePdfBlobUrl(resumeData, template)
+        if (urlRef.current) window.URL.revokeObjectURL(urlRef.current)
+        urlRef.current = url
+        setPdfUrl(url)
+      } catch {
+        setError(true)
+      } finally {
+        setLoading(false)
       }
-      ul {
-        margin-top: 7px;
-        padding-left: 20px;
-        list-style-type: disc;
-        list-style-position: outside;
-      }
-      li {
-        display: list-item;
-      }
-      p {
-        margin: 6px 0;
-        text-align: ${resumeData.formatting?.paragraph_alignment || "left"};
-      }
-      a {
-        color: inherit;
-        text-decoration: none;
-      }
-    </style>
-  `
+    }, 1200)
+    return () => clearTimeout(timer)
+  }, [resumeData, template, mode])
+
+  // Release the last object URL on unmount.
+  useEffect(() => () => { if (urlRef.current) window.URL.revokeObjectURL(urlRef.current) }, [])
+
+  const geo = pageGeometry(resumeData)
+  const html = renderResumeHtml(resumeData, template)
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Live Resume Preview</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardTitle>Resume Preview</CardTitle>
+        <div className="flex rounded-md border border-border p-0.5 text-xs">
+          <button
+            onClick={() => setMode("pdf")}
+            className={`rounded px-2 py-1 transition-colors ${mode === "pdf" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Exact (PDF)
+          </button>
+          <button
+            onClick={() => setMode("fast")}
+            className={`rounded px-2 py-1 transition-colors ${mode === "fast" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Fast
+          </button>
+        </div>
       </CardHeader>
       <CardContent>
-        <div
-          className="border rounded-lg p-4 bg-white min-h-[600px] max-h-[800px] overflow-auto"
-          dangerouslySetInnerHTML={{ __html: resumeHTML }}
-        />
+        {mode === "pdf" ? (
+          <div className="relative min-h-[600px]">
+            {error ? (
+              <div className="flex min-h-[600px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border p-6 text-center">
+                <AlertTriangle className="h-8 w-8 text-amber-500" />
+                <p className="text-sm text-muted-foreground">
+                  Couldn&apos;t reach the PDF service to render the exact preview.
+                </p>
+                <button
+                  onClick={() => setMode("fast")}
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Show the fast preview instead
+                </button>
+              </div>
+            ) : (
+              <>
+                {loading && (
+                  <div className="absolute inset-x-0 top-2 z-10 mx-auto flex w-fit items-center gap-2 rounded-full border border-border bg-background/90 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Rendering exact pages…
+                  </div>
+                )}
+                {pdfUrl ? (
+                  <iframe
+                    title="Exact PDF preview"
+                    src={`${pdfUrl}#view=FitH`}
+                    className="h-[800px] w-full rounded-lg border bg-white"
+                  />
+                ) : (
+                  <div className="flex min-h-[600px] items-center justify-center rounded-lg border bg-muted/30 text-sm text-muted-foreground">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating preview…
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="max-h-[800px] overflow-auto rounded-lg border bg-neutral-300 p-4 dark:bg-neutral-700">
+            <div
+              className="mx-auto bg-white text-black shadow-md"
+              style={{ width: `${geo.widthMm}mm`, maxWidth: "100%", padding: geo.padding }}
+            >
+              <div style={{ zoom: geo.zoom }} dangerouslySetInnerHTML={{ __html: html }} />
+            </div>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              Approximate — matches the PDF width, but switch to <strong>Exact (PDF)</strong> for true page breaks.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

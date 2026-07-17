@@ -8,8 +8,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
-from app.api.routes import (cover_letter, pdf, resume, rewrite_resume,
-                            rewrite_section)
+from app.api.routes import (ats_check, cover_letter, pdf, resume,
+                            rewrite_resume, rewrite_section, versions)
 
 load_dotenv()
 
@@ -39,6 +39,8 @@ app.include_router(resume.router, prefix="/api", tags=["resume"])
 app.include_router(rewrite_resume.router, prefix="/api", tags=["rewrite_resume"])
 app.include_router(rewrite_section.router, prefix="/api", tags=["rewrite_section"])
 app.include_router(cover_letter.router, prefix="/api", tags=["cover_letter"])
+app.include_router(ats_check.router, prefix="/api", tags=["ats_check"])
+app.include_router(versions.router, prefix="/api", tags=["versions"])
 
 
 @app.get("/wake")

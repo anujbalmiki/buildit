@@ -10,6 +10,7 @@ import BulletPointsSection from "./sections/BulletPointsSection"
 import EducationSection from "./sections/EducationSection"
 import ExperienceSection from "./sections/ExperienceSection"
 import ParagraphSection from "./sections/ParagraphSection"
+import ProjectSection from "./sections/ProjectSection"
 
 interface SectionManagerProps {
   resumeData: ResumeData
@@ -22,6 +23,7 @@ const SECTION_TYPES: { value: string; label: string }[] = [
   { value: "paragraph", label: "Paragraph" },
   { value: "bullet_points", label: "Bullet Points" },
   { value: "experience", label: "Experience" },
+  { value: "project", label: "Project" },
   { value: "education", label: "Education" },
 ]
 
@@ -73,6 +75,21 @@ export default function SectionManager({
           end_month: "",
           end_year: "",
           details: "",
+        },
+      ]
+    } else if (newSectionType === "project") {
+      newSection.items = [
+        {
+          name: "",
+          tech: "",
+          github: "",
+          link: "",
+          start_month: "",
+          start_year: "",
+          end_type: "None" as const,
+          end_month: "",
+          end_year: "",
+          bullet_points: [""],
         },
       ]
     }
@@ -143,6 +160,8 @@ export default function SectionManager({
         return <ExperienceSection key={index} {...commonProps} />
       case "education":
         return <EducationSection key={index} {...commonProps} />
+      case "project":
+        return <ProjectSection key={index} {...commonProps} />
       default:
         return null
     }

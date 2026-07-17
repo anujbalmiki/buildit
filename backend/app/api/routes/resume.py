@@ -6,77 +6,58 @@ from app.text_extraction import extract_text_from_file
 
 router = APIRouter()
 
-PARSE_PROMPT = (
-    "You are an expert resume parser. Given the resume text below, extract all relevant information in structured JSON format as described:\n\n"
-    "{\n"
-    '  "name": "",\n'
-    '  "title": "",\n'
-    '  "contact_info": "",  // Combine all contact details and social links (phone, email, LinkedIn, location, etc.) and separate them with " | "\n'
-    '  "sections": [\n'
-    '    {\n'
-    '      "type": "paragraph" | "bullet_points" | "experience",\n'
-    '      "title": "",\n'
-    '      "content": "",           // for paragraph type only\n'
-    '      "items": [],             // for bullet_points or experience only\n'
-    '      "title_formatting": {"alignment": "left", "font_size": 16, "font_weight": "bold"},\n'
-    '      "content_formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}\n'
-    '    }\n'
-    '    // Additional sections detected from the resume\n'
-    '  ]\n'
-    "}\n\n"
-    "Strict Parsing Rules:\n"
-    "1. Do NOT repeat or duplicate sections. Each section should appear only once.\n"
-    "2. Use \"paragraph\" type when the section contains only a descriptive block of text. Put that in `content`, leave `items` empty.\n"
-    "3. Use \"bullet_points\" if the section is a list (e.g., skills, certifications). Put points in `items`, leave `content` empty.\n"
-    "4. Use \"experience\" for job history, projects, or certifications with multiple entries. Format each entry with:\n"
-    '     {\n'
-    '       "position": "",\n'
-    '       "company": "",\n'
-    '       "start_month": "",\n'
-    '       "start_year": "",\n'
-    '       "end_month": "",\n'
-    '       "end_year": "",\n'
-    '       "end_type": "None", None if there is no end month or       "Present" if the end month is "Present" or "Specific Month" if there is a end month given\n'
-    '       "bullet_points": []\n'
-    '     }\n'
-    '     - If the date is not in range then it should be original value.\n'
-    '          e.g. 03/2022 - Present -> March 2022 - Present\n'
-    '          e.g. 03/2022 - 03/2023 -> March 2022 - March 2023\n'
-    '          e.g. 03/2022 - 2023 -> March 2022 - 2023\n'
-    '          e.g. 2022 - Present -> 2022 - Present\n'
-    '          e.g. 2022 - 2023 -> 2022 - 2023\n'
-    '          e.g. 03/2022 -> March 2022\n'
-    '     - If there is no date than it should be null\n'
-    "5. NEVER include empty sections. If a section has no `content` or `items`, do NOT include it at all.\n"
-    "6. If a section has content but no title, assign a suitable inferred title (e.g., 'Summary', 'Objective').\n"
-    "7. For the 'Skills' section:\n"
-    "   - If the skills are categorized, list them with one bullet per category.\n"
-    "   - If skills are listed inline (comma-separated or pipe-separated or dot-separated), return them as a paragraph with comma-separated values.\n"
-    "   - If uncategorized, return them as a comma-separated string in the `content` field.\n"
-    "8. Do not fabricate or infer experience/project entries. Only include what is explicitly mentioned.\n"
-    "9. Maintain the natural order of content as it appears in the resume.\n"
-    "10. Contact info must be compact, clear, and separated using ' | '.\n\n"
-    "11. Use \"experience\" type for education sections, and format them as:\n"
-    '     {\n'
-    '       "degree": "",\n'
-    '       "major": "",\n'
-    '       "institution": "",\n'
-    '       "start_month": "",\n'
-    '       "start_year": "",\n'
-    '       "end_month": "",\n'
-    '       "end_year": "",\n'
-    '       "end_type": "None", None if there is no end month or       "Present" if the end month is "Present" or "Specific Month" if there is a end month given\n'
-    '       "bullet_points": []\n'
-    '     }\n'
-    '     - If the date is not in range then it should be original value.\n'
-    '          e.g. 03/2022 - Present -> March 2022 - Present\n'
-    '          e.g. 03/2022 - 03/2023 -> March 2022 - March 2023\n'
-    '          e.g. 03/2022 - 2023 -> March 2022 - 2023\n'
-    '          e.g. 2022 - Present -> 2022 - Present\n'
-    '          e.g. 2022 - 2023 -> 2022 - 2023\n'
-    '          e.g. 03/2022 -> March 2022\n'
-    '     - If there is no date than it should be null\n'
-)
+PARSE_PROMPT = """You are an expert resume parser. Read the resume text below and return ONLY a JSON object with this exact shape:
+
+{
+  "name": "",
+  "title": "",
+  "contact_info": "",
+  "sections": [
+    {
+      "type": "paragraph | bullet_points | experience | education | project",
+      "title": "",
+      "content": "",
+      "items": [],
+      "title_formatting": {"alignment": "left", "font_size": 16, "font_weight": "bold"},
+      "content_formatting": {"alignment": "left", "font_size": 14, "font_weight": "normal"}
+    }
+  ]
+}
+
+GENERAL RULES
+- Do not invent information. Use only what is present in the text.
+- Keep the natural order of sections as they appear.
+- Never output an empty section (no content and no items). Omit it entirely.
+- Do not duplicate a section.
+- contact_info: combine phone, email, location, and links into one string separated by " | ".
+- If a section has content but no clear title, infer a sensible one (e.g. "Summary").
+
+SECTION TYPES
+1. "paragraph": one descriptive block (e.g. summary/objective). Put the text in "content"; leave "items" empty.
+2. "bullet_points": a list such as Skills or Certifications. Put each point in "items" (array of strings); leave "content" empty.
+   - Skills that are CATEGORISED: output ONE item per category, formatted as "Category: value1, value2, ...".
+   - Skills laid out in MULTIPLE COLUMNS often extract in a scrambled order (all the category labels grouped together, then all the value lists grouped together, sometimes with a later heading mixed in). Re-pair each category label with the value list that belongs to it as best you can, and drop any heading that clearly belongs to a different section.
+   - Skills listed inline (comma/pipe/dot separated and uncategorised): use a "paragraph" with a comma-separated string in "content".
+3. "experience": jobs / work history only. "items" is an array of:
+   {"position": "", "company": "", "start_month": "", "start_year": "", "end_month": "", "end_year": "", "end_type": "", "bullet_points": []}
+4. "education": schooling only. "items" is an array of:
+   {"degree": "", "institution": "", "start_month": "", "start_year": "", "end_month": "", "end_year": "", "end_type": "", "details": ""}
+5. "project": personal, academic, or side projects. "items" is an array of:
+   {"name": "", "tech": "", "github": "", "link": "", "start_month": "", "start_year": "", "end_month": "", "end_year": "", "end_type": "", "bullet_points": []}
+   - "tech": the tech stack (often written as a "Stack: ..." line).
+   - "github": any github.com URL for the project. "link": any other live/demo URL. Leave "" if absent.
+   - Put projects under "project", NEVER under "experience". Likewise put education under "education", never under "experience".
+
+DATES (apply to experience, education, and project entries)
+- Use full month names with 4-digit years, e.g. "March 2022".
+- "end_type": "Present" if the entry is ongoing; "Specific Month" if there is a real end date; "None" if there is no end date at all.
+- Preserve the original granularity:
+    "03/2022 - Present" -> start_month "March", start_year "2022", end_type "Present"
+    "03/2022 - 03/2023" -> start "March 2022", end "March 2023", end_type "Specific Month"
+    "2020 - 2023"       -> start_year "2020", end_year "2023", months "", end_type "Specific Month"
+    "May 2025"          -> start_month "May", start_year "2025", end_type "None"
+    no date             -> all date fields "", end_type "None"
+"""
 
 
 @router.get("/resume/{email}")

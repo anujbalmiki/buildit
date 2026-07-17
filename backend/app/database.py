@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 from datetime import datetime
 
@@ -7,6 +9,12 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 
 load_dotenv()
+
+# Version-history retention. Auto snapshots are disposable (throttled autosave
+# checkpoints); protected snapshots are the ones the user or a destructive load
+# created and must not be evicted by auto churn. See save_version / _prune_versions.
+AUTO_VERSION_CAP = 30
+PROTECTED_VERSION_CAP = 50
 
 
 class Database:
@@ -62,6 +70,85 @@ class Database:
             {"$set": resume_data},
             upsert=True,
         )
+
+    # ------------------------------------------------------------------ #
+    # Version history
+    # ------------------------------------------------------------------ #
+
+    def _versions(self) -> Collection:
+        self._collection()  # ensure the client is connected
+        return self._client.buildit.resume_versions
+
+    @staticmethod
+    def _snapshot_hash(snapshot: dict) -> str:
+        clean = {k: v for k, v in (snapshot or {}).items()
+                 if k not in ("_id", "email", "last_updated")}
+        return hashlib.sha256(
+            json.dumps(clean, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+
+    def save_version(self, email: str, snapshot: dict, source: str = "auto",
+                     protected: bool = False):
+        """Store a point-in-time copy of a resume. Skips writing when the
+        snapshot is identical to the most recent version (dedupe), then prunes
+        old versions so auto churn can never evict protected checkpoints."""
+        clean = {k: v for k, v in dict(snapshot or {}).items()
+                 if k not in ("_id", "email", "last_updated")}
+        digest = self._snapshot_hash(clean)
+
+        col = self._versions()
+        latest = col.find_one({"email": email}, sort=[("created_at", -1)])
+        if latest and latest.get("hash") == digest:
+            return None  # identical to the last version — nothing to store
+
+        result = col.insert_one({
+            "email": email,
+            "snapshot": clean,
+            "source": source,
+            "protected": bool(protected),
+            "hash": digest,
+            "created_at": datetime.now(),
+        })
+        self._prune_versions(email)
+        return str(result.inserted_id)
+
+    def _prune_versions(self, email: str):
+        col = self._versions()
+        for is_protected, cap in ((False, AUTO_VERSION_CAP), (True, PROTECTED_VERSION_CAP)):
+            extra = list(
+                col.find({"email": email, "protected": is_protected})
+                .sort("created_at", -1)
+                .skip(cap)
+            )
+            if extra:
+                col.delete_many({"_id": {"$in": [d["_id"] for d in extra]}})
+
+    @staticmethod
+    def _version_meta(doc: dict) -> dict:
+        created = doc.get("created_at")
+        return {
+            "id": str(doc["_id"]),
+            "source": doc.get("source", "auto"),
+            "protected": bool(doc.get("protected", False)),
+            "created_at": created.isoformat() if created else None,
+        }
+
+    def list_versions(self, email: str):
+        col = self._versions()
+        docs = col.find({"email": email}, {"snapshot": 0}).sort("created_at", -1)
+        return [self._version_meta(d) for d in docs]
+
+    def get_version(self, email: str, version_id: str):
+        try:
+            oid = ObjectId(version_id)
+        except Exception:
+            return None
+        doc = self._versions().find_one({"_id": oid, "email": email})
+        if not doc:
+            return None
+        meta = self._version_meta(doc)
+        meta["snapshot"] = self._convert_objectid(doc.get("snapshot", {}))
+        return meta
 
 
 db = Database()

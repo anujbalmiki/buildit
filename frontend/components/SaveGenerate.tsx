@@ -1,281 +1,140 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Download, LogIn, Save } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
+import { downloadResumePdf } from "@/lib/resumeExport"
+import { collectAtsExpected, renderResumeHtml } from "@/lib/resumeTemplates"
 import type { ResumeData } from "@/types/resume"
-import { signIn, useSession } from "next-auth/react"
+import { CheckCircle2, Download, Loader2, ScanLine, XCircle } from "lucide-react"
+import { useState } from "react"
 
 interface SaveGenerateProps {
   resumeData: ResumeData
   isLoading: boolean
   setIsLoading: (loading: boolean) => void
+  template?: string
 }
 
-export default function SaveGenerate({ resumeData, isLoading, setIsLoading }: SaveGenerateProps) {
-  const { data: session } = useSession()
+interface AtsReport {
+  pass: boolean
+  checks: {
+    text_extracted: boolean
+    word_count: number
+    expected_found: number
+    expected_total: number
+    reading_order_ok: boolean
+    missing_from_extraction: string[]
+    suspicious_glued_tokens: string[]
+  }
+  extracted_text: string
+}
+
+export default function SaveGenerate({ resumeData, isLoading, setIsLoading, template }: SaveGenerateProps) {
   const { toast } = useToast()
-  const email = session?.user?.email
 
-  const saveResume = async () => {
-    if (!email) return
+  const [atsLoading, setAtsLoading] = useState(false)
+  const [atsReport, setAtsReport] = useState<AtsReport | null>(null)
+  const [showExtracted, setShowExtracted] = useState(false)
 
+  const generatePDF = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/resume/${encodeURIComponent(email)}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(resumeData),
-      })
-
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Resume saved successfully!",
-        })
-      } else {
-        throw new Error("Failed to save resume")
-      }
+      await downloadResumePdf(resumeData, template)
+      toast({ title: "Success", description: "PDF generated and downloaded successfully!" })
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to save resume. Please try again.",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Failed to generate PDF. Please try again.", variant: "destructive" })
     } finally {
       setIsLoading(false)
     }
   }
 
-  const generatePDF = async () => {
-    setIsLoading(true)
+  const runAtsCheck = async () => {
+    setAtsLoading(true)
+    setAtsReport(null)
     try {
-      // Generate HTML content
-      const makeLinksClickable = (text: string) => {
-        const urlRegex = /(https?:\/\/[^\s|]+)/g
-        return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
-      }
-
-      const formatDateRange = (item: any) => {
-        const { start_month, start_year, end_type, end_month, end_year } = item
-
-        if (!start_year || start_year === "") return ""
-
-        const start = start_month && start_month !== "None" ? `${start_month} ${start_year}` : start_year
-
-        if (end_type === "Present") {
-          return `${start} - Present`
-        } else if (end_type === "Specific Month" && end_year && end_year !== "") {
-          const end = end_month && end_month !== "None" ? `${end_month} ${end_year}` : end_year
-          return `${start} - ${end}`
-        }
-
-        return start
-      }
-
-      const getSectionContent = (section: any) => {
-        const titleStyle = `text-align:${section.title_formatting?.alignment || "left"};font-size:${section.title_formatting?.font_size || 16}px;font-weight:${section.title_formatting?.font_weight || "bold"};`
-        const contentStyle = `text-align:${section.content_formatting?.alignment || "left"};font-size:${section.content_formatting?.font_size || 14}px;font-weight:${section.content_formatting?.font_weight || "normal"};`
-
-        switch (section.type) {
-          case "paragraph":
-            return `<div class='section-title' style='${titleStyle}'>${section.title}</div><p style='${contentStyle}'>${section.content}</p>`
-
-          case "bullet_points":
-            const items = (section.items || [])
-              .map((item: string) => `<li style='${contentStyle}'>${item}</li>`)
-              .join("")
-            return `<div class='section-title' style='${titleStyle}'>${section.title}</div><ul>${items}</ul>`
-
-          case "experience":
-            const expItems = (section.items || [])
-              .map((exp: any) => {
-                const bullets = (exp.bullet_points || [])
-                  .map((bullet: string) => `<li style='${contentStyle}'>${bullet}</li>`)
-                  .join("")
-                const dateHtml = formatDateRange(exp) ? `<span style='float:right;'>${formatDateRange(exp)}</span>` : ""
-                const companyHtml = exp.company ? `, ${exp.company}` : ""
-                return `<p style='${contentStyle}'><strong>${exp.position || ""}</strong>${companyHtml} ${dateHtml}</p><ul>${bullets}</ul>`
-              })
-              .join("")
-            return `<div class='section-title' style='${titleStyle}'>${section.title}</div>${expItems}`
-
-          case "education":
-            const eduItems = (section.items || [])
-              .map((edu: any) => {
-                const dateHtml = formatDateRange(edu) ? `<span style='float:right;'>${formatDateRange(edu)}</span>` : ""
-                const detailsHtml = edu.details ? `<p style='${contentStyle}'>${edu.details}</p>` : ""
-                return `<p style='${contentStyle}'><strong>${edu.degree || ""}</strong>, ${edu.institution || ""} ${dateHtml}</p>${detailsHtml}`
-              })
-              .join("")
-            return `<div class='section-title' style='${titleStyle}'>${section.title}</div>${eduItems}`
-
-          default:
-            return ""
-        }
-      }
-
-      const sectionsHtml = resumeData.sections.map((section) => getSectionContent(section)).join("")
-      const contactInfoHtml = makeLinksClickable(resumeData.contact_info)
-
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>${resumeData.name} - ${resumeData.title} Resume</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    line-height: ${resumeData.pdf_settings.spacing};
-                    color: #000;
-                    background: #fff;
-                    padding: 0;
-                    margin: 0;
-                    transform: scale(${resumeData.pdf_settings.scale});
-                    zoom: ${resumeData.pdf_settings.zoom};
-                }
-                .resume-container {
-                    max-width: 800px;
-                    margin: auto;
-                    padding: 0 25px 25px 25px;
-                    border: none;
-                }
-                h1, h2 {
-                    text-align: ${resumeData.formatting.name_alignment};
-                    margin-bottom: 5px;
-                }
-                h1 {
-                    font-size: 24px;
-                    font-weight: ${resumeData.formatting.name_weight};
-                }
-                h2 {
-                    font-size: 16px;
-                    font-weight: normal;
-                    margin-top: 0;
-                }
-                .section-title {
-                    font-weight: bold;
-                    margin-top: 20px;
-                    border-bottom: 1px solid #000;
-                    padding-bottom: 3px;
-                    text-align: ${resumeData.formatting.section_title_alignment};
-                }
-                ul {
-                    margin-top: 7px;
-                    padding-left: 20px;
-                }
-                p {
-                    margin: 6px 0;
-                    text-align: ${resumeData.formatting.paragraph_alignment};
-                }
-                .contact {
-                    text-align: center;
-                    font-size: 14px;
-                }
-                a {
-                    color: inherit;
-                    text-decoration: none;
-                }
-                @media print {
-                    body {
-                        padding: 0;
-                        margin: 0;
-                    }
-                    .resume-container {
-                        padding: 20px;
-                        max-width: 100%;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="resume-container">
-                <h1>${resumeData.name}</h1>
-                <h2>${resumeData.title}</h2>
-                <div class="contact">
-                    ${contactInfoHtml}
-                </div>
-                ${sectionsHtml}
-            </div>
-        </body>
-        </html>
-      `
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/generate-pdf`, {
+      const html = renderResumeHtml(resumeData, template)
+      const expected = collectAtsExpected(resumeData)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/ats-check`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          html: htmlContent,
-          ...resumeData.pdf_settings,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, expected }),
       })
-
-      if (response.ok) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.style.display = "none"
-        a.href = url
-        a.download = `${resumeData.name.replace(/\s+/g, "_")}_Resume.pdf`
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-
-        toast({
-          title: "Success",
-          description: "PDF generated and downloaded successfully!",
-        })
-      } else {
-        throw new Error("Failed to generate PDF")
-      }
+      if (!response.ok) throw new Error("ATS check failed")
+      setAtsReport(await response.json())
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to generate PDF. Please try again.",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Could not run the ATS check. Please try again.", variant: "destructive" })
     } finally {
-      setIsLoading(false)
+      setAtsLoading(false)
     }
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Save & Generate</CardTitle>
+        <CardTitle>Export</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          {email
-            ? `Saving to your account (${email}).`
-            : "Generate and download a PDF anytime. Sign in to also save your resume to your account."}
+          Download your resume as a PDF. When you&apos;re signed in, edits save to your account automatically.
         </p>
 
-        <div className="flex gap-4">
-          {email ? (
-            <Button onClick={saveResume} disabled={isLoading} className="flex-1">
-              <Save className="w-4 h-4 mr-2" />
-              {isLoading ? "Saving..." : "Save Resume"}
-            </Button>
-          ) : (
-            <Button onClick={() => signIn("google")} variant="secondary" className="flex-1">
-              <LogIn className="w-4 h-4 mr-2" />
-              Sign in to Save
-            </Button>
-          )}
+        <Button onClick={generatePDF} disabled={isLoading} className="w-full">
+          <Download className="w-4 h-4 mr-2" />
+          {isLoading ? "Generating..." : "Generate PDF"}
+        </Button>
 
-          <Button onClick={generatePDF} disabled={isLoading} variant="outline" className="flex-1">
-            <Download className="w-4 h-4 mr-2" />
-            {isLoading ? "Generating..." : "Generate PDF"}
+        {/* ATS readability self-check */}
+        <div className="border-t border-border pt-4">
+          <Button onClick={runAtsCheck} disabled={atsLoading} variant="outline" className="w-full">
+            {atsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScanLine className="mr-2 h-4 w-4" />}
+            {atsLoading ? "Checking…" : "Check ATS Readability"}
           </Button>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Renders your PDF and reads it back with the same parser an ATS uses, to confirm the text extracts cleanly.
+          </p>
+
+          {atsReport && (
+            <div className="mt-3 rounded-md border border-border p-3 text-sm">
+              <div className="flex items-center gap-2 font-medium">
+                {atsReport.pass ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <span className="text-emerald-600 dark:text-emerald-400">Passed — ATS-readable</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-4 w-4 text-red-500" />
+                    <span className="text-red-600 dark:text-red-400">Issues found</span>
+                  </>
+                )}
+              </div>
+
+              <ul className="mt-2 space-y-1 text-muted-foreground">
+                <li>Text extracted: {atsReport.checks.text_extracted ? "yes" : "no"} ({atsReport.checks.word_count} words)</li>
+                <li>Key content found: {atsReport.checks.expected_found}/{atsReport.checks.expected_total}</li>
+                <li>Reading order preserved: {atsReport.checks.reading_order_ok ? "yes" : "no"}</li>
+              </ul>
+
+              {atsReport.checks.missing_from_extraction.length > 0 && (
+                <p className="mt-2 text-red-600 dark:text-red-400">
+                  Not detected by the parser: {atsReport.checks.missing_from_extraction.join(", ")}
+                </p>
+              )}
+
+              <button
+                onClick={() => setShowExtracted((v) => !v)}
+                className="mt-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                {showExtracted ? "Hide" : "Show"} what the ATS sees
+              </button>
+              {showExtracted && (
+                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs text-foreground">
+                  {atsReport.extracted_text}
+                </pre>
+              )}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
