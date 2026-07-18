@@ -65,6 +65,7 @@ export default function ResumeBuilder() {
   const editedRef = useRef(false)
   const lastEditAt = useRef(0)
   const lastAutoVersionAt = useRef(0)
+  const autoLoadedFor = useRef<string | null>(null)
 
   const template = resumeData.template ?? DEFAULT_TEMPLATE
 
@@ -100,6 +101,24 @@ export default function ResumeBuilder() {
     setFuture([])
     setResumeData(data)
   }
+
+  // Auto-load the user's saved resume once, right after they sign in — there's
+  // only one resume per account. Skip if they already have unsaved edits in
+  // progress (so we never clobber local work) or if nothing is saved yet.
+  useEffect(() => {
+    if (!email || autoLoadedFor.current === email || editedRef.current) return
+    autoLoadedFor.current = email
+    ;(async () => {
+      try {
+        const res = await fetch(`${BACKEND}/api/resume/${encodeURIComponent(email)}`)
+        if (res.ok) loadResumeData(await res.json())
+      } catch {
+        /* leave the current resume as-is on failure */
+      }
+    })()
+    // loadResumeData reads the latest state via closure; only re-run per email.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [email])
 
   const undo = useCallback(() => {
     setPast((p) => {
