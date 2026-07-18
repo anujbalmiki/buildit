@@ -1,5 +1,6 @@
 "use client"
 
+import JobMatch from "@/components/JobMatch"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -98,6 +99,8 @@ export default function AiTools({
             Leave empty to polish your existing content; add a JD to tailor it to a specific role.
           </p>
         </div>
+
+        <JobMatch resumeData={resumeData} jobDescription={jobDescription} updateResumeData={updateResumeData} />
 
         <div className="space-y-2">
           <Button onClick={handleRewriteResume} disabled={loadingRewrite}>

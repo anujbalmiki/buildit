@@ -14,235 +14,155 @@ interface FormattingOptionsProps {
   updateResumeData: (updates: Partial<ResumeData>) => void
 }
 
-export default function FormattingOptions({ resumeData, updateResumeData }: FormattingOptionsProps) {
-  const updateFormatting = (updates: Partial<ResumeData["formatting"]>) => {
-    updateResumeData({
-      formatting: { ...resumeData.formatting, ...updates },
-    })
+type Margins = ResumeData["pdf_settings"]["margins"]
+
+// Top stays small on every preset so the name/header sits near the top of page
+// one; continuation pages get their own top margin automatically (backend).
+const MARGIN_PRESETS: Record<string, Margins> = {
+  Compact: { top: "0mm", right: "6mm", bottom: "6mm", left: "6mm" },
+  Normal: { top: "0mm", right: "8mm", bottom: "8mm", left: "8mm" },
+  Wide: { top: "0mm", right: "14mm", bottom: "12mm", left: "14mm" },
+}
+
+const DENSITY_PRESETS: Record<string, { zoom: number; spacing: number }> = {
+  Compact: { zoom: 1.0, spacing: 1.15 },
+  Normal: { zoom: 1.15, spacing: 1.3 },
+  Relaxed: { zoom: 1.25, spacing: 1.5 },
+}
+
+function marginPresetName(m?: Margins): string {
+  for (const [name, p] of Object.entries(MARGIN_PRESETS)) {
+    if (p.right === m?.right && p.bottom === m?.bottom && p.left === m?.left) return name
   }
+  return "Custom"
+}
+
+function densityPresetName(s?: ResumeData["pdf_settings"]): string {
+  for (const [name, p] of Object.entries(DENSITY_PRESETS)) {
+    if (p.zoom === s?.zoom && p.spacing === s?.spacing) return name
+  }
+  return "Custom"
+}
+
+function Segmented({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="inline-flex rounded-md border border-border p-0.5">
+      {options.map((o) => (
+        <button
+          key={o}
+          type="button"
+          onClick={() => onChange(o)}
+          className={`rounded px-3 py-1 text-sm transition-colors ${
+            value === o ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {o}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export default function FormattingOptions({ resumeData, updateResumeData }: FormattingOptionsProps) {
+  const pdf = resumeData.pdf_settings
 
   const updatePDFSettings = (updates: Partial<ResumeData["pdf_settings"]>) => {
-    updateResumeData({
-      pdf_settings: { ...resumeData.pdf_settings, ...updates },
-    })
+    updateResumeData({ pdf_settings: { ...pdf, ...updates } })
   }
 
-  const updateMargins = (updates: Partial<ResumeData["pdf_settings"]["margins"]>) => {
-    updatePDFSettings({
-      margins: { ...resumeData.pdf_settings.margins, ...updates },
-    })
+  const updateMargins = (updates: Partial<Margins>) => {
+    updatePDFSettings({ margins: { ...pdf.margins, ...updates } })
   }
+
+  const marginName = marginPresetName(pdf?.margins)
+  const densityName = densityPresetName(pdf)
 
   return (
-    <div className="space-y-4">
-      <Collapsible>
-        <CollapsibleTrigger asChild>
-          <Card className="cursor-pointer hover:bg-accent">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg">Advanced Formatting Options</CardTitle>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Page setup</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+          <Label>Page size</Label>
+          <Select
+            value={pdf?.page_size || "A4"}
+            onValueChange={(value: "A4" | "Letter" | "Legal") => updatePDFSettings({ page_size: value })}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="A4">A4 (most of the world)</SelectItem>
+              <SelectItem value="Letter">Letter (US &amp; Canada)</SelectItem>
+              <SelectItem value="Legal">Legal</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Margins</Label>
+          <Segmented
+            options={["Compact", "Normal", "Wide"]}
+            value={marginName}
+            onChange={(name) => updatePDFSettings({ margins: { ...MARGIN_PRESETS[name] } })}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Density</Label>
+          <Segmented
+            options={["Compact", "Normal", "Relaxed"]}
+            value={densityName}
+            onChange={(name) => updatePDFSettings({ ...DENSITY_PRESETS[name] })}
+          />
+          <p className="text-xs text-muted-foreground">Controls text size and line spacing — fit more, or give it room.</p>
+        </div>
+
+        <Collapsible>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Advanced
               <ChevronDown className="h-4 w-4" />
-            </CardHeader>
-          </Card>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Name Alignment</Label>
-                    <Select
-                      value={resumeData?.formatting?.name_alignment || "left"}
-                      onValueChange={(value: "left" | "center" | "right") =>
-                        updateFormatting({ name_alignment: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="left">Left</SelectItem>
-                        <SelectItem value="center">Center</SelectItem>
-                        <SelectItem value="right">Right</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Section Title Alignment</Label>
-                    <Select
-                      value={resumeData?.formatting?.section_title_alignment || "left"}
-                      onValueChange={(value: "left" | "center" | "right") =>
-                        updateFormatting({ section_title_alignment: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="left">Left</SelectItem>
-                        <SelectItem value="center">Center</SelectItem>
-                        <SelectItem value="right">Right</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Name Font Weight</Label>
-                    <Select
-                      value={resumeData?.formatting?.name_weight || "normal"}
-                      onValueChange={(value: "normal" | "bold" | "bolder") => updateFormatting({ name_weight: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="normal">Normal</SelectItem>
-                        <SelectItem value="bold">Bold</SelectItem>
-                        <SelectItem value="bolder">Bolder</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Paragraph Alignment</Label>
-                    <Select
-                      value={resumeData?.formatting?.paragraph_alignment || "left"}
-                      onValueChange={(value: "left" | "center" | "right" | "justify") =>
-                        updateFormatting({ paragraph_alignment: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="left">Left</SelectItem>
-                        <SelectItem value="center">Center</SelectItem>
-                        <SelectItem value="right">Right</SelectItem>
-                        <SelectItem value="justify">Justify</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </CollapsibleContent>
-      </Collapsible>
-
-      <Collapsible>
-        <CollapsibleTrigger asChild>
-          <Card className="cursor-pointer hover:bg-accent">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg">PDF Export Settings</CardTitle>
-              <ChevronDown className="h-4 w-4" />
-            </CardHeader>
-          </Card>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <Card>
-            <CardContent className="pt-6 space-y-6">
-              <div className="space-y-2">
-                <Label>Page Size</Label>
-                <Select
-                  value={resumeData?.pdf_settings?.page_size || "A4"}
-                  onValueChange={(value: "A4" | "Letter" | "Legal") => updatePDFSettings({ page_size: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="A4">A4</SelectItem>
-                    <SelectItem value="Letter">Letter</SelectItem>
-                    <SelectItem value="Legal">Legal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-4">
-                <Label>Margins</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="top-margin">Top Margin</Label>
-                    <Input
-                      id="top-margin"
-                      value={resumeData?.pdf_settings?.margins?.top || "20mm"}
-                      onChange={(e) => updateMargins({ top: e.target.value })}
-                      placeholder="e.g., 20mm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="right-margin">Right Margin</Label>
-                    <Input
-                      id="right-margin"
-                      value={resumeData?.pdf_settings?.margins?.right || "20mm"}
-                      onChange={(e) => updateMargins({ right: e.target.value })}
-                      placeholder="e.g., 20mm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bottom-margin">Bottom Margin</Label>
-                    <Input
-                      id="bottom-margin"
-                      value={resumeData?.pdf_settings?.margins?.bottom || "20mm"}
-                      onChange={(e) => updateMargins({ bottom: e.target.value })}
-                      placeholder="e.g., 20mm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="left-margin">Left Margin</Label>
-                    <Input
-                      id="left-margin"
-                      value={resumeData?.pdf_settings?.margins?.left || "20mm"}
-                      onChange={(e) => updateMargins({ left: e.target.value })}
-                      placeholder="e.g., 20mm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-6 pt-4">
+            <div className="space-y-2">
+              <Label>Exact margins</Label>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Content Scale: {resumeData?.pdf_settings?.scale || 1.0}</Label>
-                  <Slider
-                    value={[resumeData?.pdf_settings?.scale || 1.0]}
-                    onValueChange={([value]) => updatePDFSettings({ scale: value })}
-                    min={0.5}
-                    max={1.5}
-                    step={0.05}
-                    className="w-full"
-                  />
+                  <Label htmlFor="top-margin" className="text-xs text-muted-foreground">First-page top</Label>
+                  <Input id="top-margin" value={pdf?.margins?.top || "0mm"} onChange={(e) => updateMargins({ top: e.target.value })} placeholder="e.g. 0mm" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Zoom Level: {resumeData?.pdf_settings?.zoom || 1.0}</Label>
-                  <Slider
-                    value={[resumeData?.pdf_settings?.zoom || 1.0]}
-                    onValueChange={([value]) => updatePDFSettings({ zoom: value })}
-                    min={0.5}
-                    max={1.5}
-                    step={0.05}
-                    className="w-full"
-                  />
+                  <Label htmlFor="right-margin" className="text-xs text-muted-foreground">Right</Label>
+                  <Input id="right-margin" value={pdf?.margins?.right || "8mm"} onChange={(e) => updateMargins({ right: e.target.value })} placeholder="e.g. 8mm" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bottom-margin" className="text-xs text-muted-foreground">Bottom</Label>
+                  <Input id="bottom-margin" value={pdf?.margins?.bottom || "8mm"} onChange={(e) => updateMargins({ bottom: e.target.value })} placeholder="e.g. 8mm" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="left-margin" className="text-xs text-muted-foreground">Left</Label>
+                  <Input id="left-margin" value={pdf?.margins?.left || "8mm"} onChange={(e) => updateMargins({ left: e.target.value })} placeholder="e.g. 8mm" />
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label>Line Spacing: {resumeData?.pdf_settings?.spacing || 1.0}</Label>
-                <Slider
-                  value={[resumeData?.pdf_settings?.spacing || 1.0]}
-                  onValueChange={([value]) => updatePDFSettings({ spacing: value })}
-                  min={1.0}
-                  max={2.0}
-                  step={0.05}
-                  className="w-full"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </CollapsibleContent>
-      </Collapsible>
-    </div>
+            <div className="space-y-2">
+              <Label>Text size (zoom): {pdf?.zoom ?? 1.0}</Label>
+              <Slider value={[pdf?.zoom ?? 1.0]} onValueChange={([value]) => updatePDFSettings({ zoom: value })} min={0.8} max={1.4} step={0.05} />
+            </div>
+            <div className="space-y-2">
+              <Label>Line spacing: {pdf?.spacing ?? 1.3}</Label>
+              <Slider value={[pdf?.spacing ?? 1.3]} onValueChange={([value]) => updatePDFSettings({ spacing: value })} min={1.0} max={2.0} step={0.05} />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </CardContent>
+    </Card>
   )
 }

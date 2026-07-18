@@ -1,5 +1,6 @@
 "use client"
 
+import ImproveBulletButton from "@/components/ImproveBulletButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,9 +11,10 @@ interface ExperienceSectionProps {
   section: ResumeSection
   index: number
   updateSection: (updates: Partial<ResumeSection>) => void
+  jobDescription?: string
 }
 
-export default function ExperienceSection({ section, updateSection }: ExperienceSectionProps) {
+export default function ExperienceSection({ section, updateSection, jobDescription }: ExperienceSectionProps) {
   const items = (section.items || []) as ExperienceItem[]
 
   const months = [
@@ -228,6 +230,12 @@ export default function ExperienceSection({ section, updateSection }: Experience
                   onChange={(e) => updateBulletPoint(expIndex, bulletIndex, e.target.value)}
                   placeholder={`Bullet point ${bulletIndex + 1}`}
                   className="flex-1"
+                />
+                <ImproveBulletButton
+                  bullet={bullet || ""}
+                  jd={jobDescription}
+                  context={[experience.position, experience.company].filter(Boolean).join(" at ")}
+                  onImproved={(text) => updateBulletPoint(expIndex, bulletIndex, text)}
                 />
                 <Button
                   variant="destructive"

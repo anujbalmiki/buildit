@@ -10,7 +10,6 @@ import BasicInfoForm from "@/components/BasicInfoForm"
 import SectionManager from "@/components/SectionManager"
 import ResumePreview from "@/components/ResumePreview"
 import FileUpload from "@/components/FileUpload"
-import LoadResume from "@/components/LoadResume"
 import SaveGenerate from "@/components/SaveGenerate"
 import FormattingOptions from "@/components/FormattingOptions"
 import TemplateSelector from "@/components/TemplateSelector"
@@ -314,7 +313,6 @@ export default function ResumeBuilder() {
               </TabsList>
 
               <TabsContent value="content" className="space-y-6">
-                <LoadResume onResumeLoaded={loadResumeData} setIsLoading={setIsLoading} />
                 <FileUpload onResumeLoaded={loadResumeData} setIsLoading={setIsLoading} />
                 <BasicInfoForm resumeData={resumeData} updateResumeData={updateResumeData} />
                 <SectionManager

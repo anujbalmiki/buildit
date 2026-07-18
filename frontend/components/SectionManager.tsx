@@ -157,11 +157,11 @@ export default function SectionManager({
       case "bullet_points":
         return <BulletPointsSection key={index} {...commonProps} />
       case "experience":
-        return <ExperienceSection key={index} {...commonProps} />
+        return <ExperienceSection key={index} {...commonProps} jobDescription={jobDescription} />
       case "education":
         return <EducationSection key={index} {...commonProps} />
       case "project":
-        return <ProjectSection key={index} {...commonProps} />
+        return <ProjectSection key={index} {...commonProps} jobDescription={jobDescription} />
       default:
         return null
     }

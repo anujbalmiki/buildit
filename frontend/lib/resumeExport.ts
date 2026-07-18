@@ -22,17 +22,38 @@ export async function fetchResumePdfBlobUrl(data: ResumeData, template?: string)
   return window.URL.createObjectURL(blob)
 }
 
+function triggerDownload(url: string, filename: string) {
+  const a = document.createElement("a")
+  a.style.display = "none"
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
 /** Generate the PDF and trigger a download. Throws on failure. */
 export async function downloadResumePdf(data: ResumeData, template?: string): Promise<void> {
   const url = await fetchResumePdfBlobUrl(data, template)
   try {
-    const a = document.createElement("a")
-    a.style.display = "none"
-    a.href = url
-    a.download = `${resumeFileName(data)}.pdf`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    triggerDownload(url, `${resumeFileName(data)}.pdf`)
+  } finally {
+    window.URL.revokeObjectURL(url)
+  }
+}
+
+/** Generate an editable Word (.docx) file from the resume data and download it. */
+export async function downloadResumeDocx(data: ResumeData): Promise<void> {
+  const response = await fetch(`${BACKEND}/api/generate-docx`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error("Failed to generate DOCX")
+  const blob = await response.blob()
+  const url = window.URL.createObjectURL(blob)
+  try {
+    triggerDownload(url, `${resumeFileName(data)}.docx`)
   } finally {
     window.URL.revokeObjectURL(url)
   }

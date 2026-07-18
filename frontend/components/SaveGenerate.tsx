@@ -3,10 +3,10 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { downloadResumePdf } from "@/lib/resumeExport"
+import { downloadResumeDocx, downloadResumePdf } from "@/lib/resumeExport"
 import { collectAtsExpected, renderResumeHtml } from "@/lib/resumeTemplates"
 import type { ResumeData } from "@/types/resume"
-import { CheckCircle2, Download, Loader2, ScanLine, XCircle } from "lucide-react"
+import { CheckCircle2, Download, FileText, Loader2, ScanLine, XCircle } from "lucide-react"
 import { useState } from "react"
 
 interface SaveGenerateProps {
@@ -36,6 +36,7 @@ export default function SaveGenerate({ resumeData, isLoading, setIsLoading, temp
   const [atsLoading, setAtsLoading] = useState(false)
   const [atsReport, setAtsReport] = useState<AtsReport | null>(null)
   const [showExtracted, setShowExtracted] = useState(false)
+  const [docxLoading, setDocxLoading] = useState(false)
 
   const generatePDF = async () => {
     setIsLoading(true)
@@ -46,6 +47,18 @@ export default function SaveGenerate({ resumeData, isLoading, setIsLoading, temp
       toast({ title: "Error", description: "Failed to generate PDF. Please try again.", variant: "destructive" })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const generateDOCX = async () => {
+    setDocxLoading(true)
+    try {
+      await downloadResumeDocx(resumeData)
+      toast({ title: "Success", description: "Editable Word (.docx) downloaded." })
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to generate the Word file. Please try again.", variant: "destructive" })
+    } finally {
+      setDocxLoading(false)
     }
   }
 
@@ -76,12 +89,18 @@ export default function SaveGenerate({ resumeData, isLoading, setIsLoading, temp
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Download your resume as a PDF. When you&apos;re signed in, edits save to your account automatically.
+          Download your resume as a PDF or an editable Word file. When you&apos;re signed in, edits save to your account
+          automatically.
         </p>
 
         <Button onClick={generatePDF} disabled={isLoading} className="w-full">
           <Download className="w-4 h-4 mr-2" />
           {isLoading ? "Generating..." : "Generate PDF"}
+        </Button>
+
+        <Button onClick={generateDOCX} disabled={docxLoading} variant="outline" className="w-full">
+          {docxLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+          {docxLoading ? "Generating…" : "Download Word (.docx)"}
         </Button>
 
         {/* ATS readability self-check */}

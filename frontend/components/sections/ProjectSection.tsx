@@ -1,5 +1,6 @@
 "use client"
 
+import ImproveBulletButton from "@/components/ImproveBulletButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,6 +11,7 @@ interface ProjectSectionProps {
   section: ResumeSection
   index: number
   updateSection: (updates: Partial<ResumeSection>) => void
+  jobDescription?: string
 }
 
 const SELECT_CLASS =
@@ -21,7 +23,7 @@ const MONTHS = [
 ]
 const YEARS = ["None", ...Array.from({ length: 151 }, (_, i) => (1950 + i).toString())]
 
-export default function ProjectSection({ section, updateSection }: ProjectSectionProps) {
+export default function ProjectSection({ section, updateSection, jobDescription }: ProjectSectionProps) {
   const items = (section.items || []) as ProjectItem[]
 
   const addProject = () => {
@@ -170,6 +172,12 @@ export default function ProjectSection({ section, updateSection }: ProjectSectio
                   onChange={(e) => updateBullet(pi, bi, e.target.value)}
                   placeholder={`Bullet point ${bi + 1}`}
                   className="flex-1"
+                />
+                <ImproveBulletButton
+                  bullet={bullet || ""}
+                  jd={jobDescription}
+                  context={[project.name, project.tech].filter(Boolean).join(" — ")}
+                  onImproved={(text) => updateBullet(pi, bi, text)}
                 />
                 <Button variant="destructive" size="sm" onClick={() => removeBullet(pi, bi)} disabled={(project.bullet_points || [""]).length === 1}>
                   <Trash2 className="h-4 w-4" />

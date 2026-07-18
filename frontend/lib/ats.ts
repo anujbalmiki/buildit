@@ -35,6 +35,7 @@ const STOPWORDS = new Set([
   "by", "it", "us", "if", "so", "do", "up", "role", "team", "work", "working", "years", "experience",
   "ability", "strong", "good", "excellent", "including", "etc", "job", "candidate", "responsibilities",
   "requirements", "plus", "skills", "knowledge", "understanding", "using", "across", "within", "must",
+  "hiring", "join", "looking", "seeking", "hire", "help", "build", "join", "were", "than", "into", "out",
 ])
 
 const hasEmail = (s: string) => /[^\s@|]+@[^\s@|]+\.[^\s@|]+/.test(s)
@@ -65,14 +66,46 @@ function allExperienceBullets(sections: ResumeSection[]): string[] {
   return bullets
 }
 
-function jdKeywords(jd: string): string[] {
-  const words = (jd.toLowerCase().match(/[a-z][a-z+#.]{2,}/g) || []).filter((w) => !STOPWORDS.has(w))
+export interface JdKeyword {
+  key: string // lowercased, used for matching
+  display: string // best-cased form seen in the JD, for showing to the user
+}
+
+function extractJdKeywords(jd: string, limit = 24): JdKeyword[] {
+  const tokens = jd.match(/[A-Za-z][A-Za-z+#.]{2,}/g) || []
   const freq = new Map<string, number>()
-  for (const w of words) freq.set(w, (freq.get(w) || 0) + 1)
+  const display = new Map<string, string>()
+  for (const raw of tokens) {
+    // Drop sentence punctuation ("pipelines." -> "pipelines") while keeping
+    // meaningful trailing symbols (c++, c#) and internal dots (node.js).
+    const t = raw.replace(/^\.+|\.+$/g, "")
+    if (t.length < 3) continue
+    const key = t.toLowerCase()
+    if (STOPWORDS.has(key)) continue
+    freq.set(key, (freq.get(key) || 0) + 1)
+    const prev = display.get(key)
+    // Prefer a capitalized form ("Kubernetes") over a lowercase one.
+    if (!prev || (/[A-Z]/.test(t) && !/[A-Z]/.test(prev))) display.set(key, t)
+  }
   return [...freq.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([w]) => w)
+    .slice(0, limit)
+    .map(([key]) => ({ key, display: display.get(key) || key }))
+}
+
+function jdKeywords(jd: string): string[] {
+  return extractJdKeywords(jd).map((k) => k.key)
+}
+
+function resumeToText(resume: ResumeData): string {
+  return [
+    resume.name,
+    resume.title,
+    resume.contact_info || "",
+    ...(resume.sections || []).map((s) => `${s.title} ${s.content || ""} ${JSON.stringify(s.items || [])}`),
+  ]
+    .join(" ")
+    .toLowerCase()
 }
 
 function bandFor(score: number): AtsBand {
@@ -87,10 +120,7 @@ export function computeAtsScore(resume: ResumeData, jobDescription = ""): AtsRes
   const contact = resume.contact_info || ""
   const expSections = experienceSections(sections)
   const bullets = allExperienceBullets(sections)
-  const resumeText = [
-    resume.name, resume.title, contact,
-    ...sections.map((s) => `${s.title} ${s.content || ""} ${JSON.stringify(s.items || [])}`),
-  ].join(" ").toLowerCase()
+  const resumeText = resumeToText(resume)
 
   const checks: AtsCheck[] = []
   const add = (id: string, label: string, ratioOrBool: number | boolean, max: number, hint?: string) => {
@@ -185,4 +215,27 @@ export function computeAtsScore(resume: ResumeData, jobDescription = ""): AtsRes
     : "Needs work — add the essentials below to get past ATS filters."
 
   return { score, band, summary, checks, topHints, sectionHints }
+}
+
+export interface JobMatch {
+  hasJd: boolean
+  score: number // % of the JD's key terms found in the resume
+  matched: string[] // display-cased terms already present
+  missing: string[] // display-cased terms absent from the resume
+}
+
+/** Compare the resume against a job description: which of the JD's most
+ *  important terms already appear, and which are missing. */
+export function computeJobMatch(resume: ResumeData, jobDescription = ""): JobMatch {
+  if (!jobDescription.trim()) return { hasJd: false, score: 0, matched: [], missing: [] }
+  const resumeText = resumeToText(resume)
+  const keywords = extractJdKeywords(jobDescription)
+  const matched: string[] = []
+  const missing: string[] = []
+  for (const k of keywords) {
+    if (resumeText.includes(k.key)) matched.push(k.display)
+    else missing.push(k.display)
+  }
+  const score = keywords.length ? Math.round((matched.length / keywords.length) * 100) : 0
+  return { hasJd: true, score, matched, missing }
 }
