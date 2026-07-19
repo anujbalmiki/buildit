@@ -287,23 +287,23 @@ export default function ResumeBuilder() {
 
   return (
     <div className="min-h-screen bg-muted/40">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <div className="mb-4 flex items-center justify-end gap-3">
-            {saveLabel && <span className="text-xs text-muted-foreground">{saveLabel}</span>}
+      {/* Compact sticky top bar — wordmark left, tools right. */}
+      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="container mx-auto flex h-14 items-center justify-between gap-3 px-4">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="text-lg font-bold tracking-tight text-foreground">Buildit</span>
+            <span className="hidden truncate text-sm text-muted-foreground sm:inline">AI Resume Builder</span>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <AtsScore result={atsResult} />
+            {saveLabel && <span className="hidden text-xs text-muted-foreground md:inline">{saveLabel}</span>}
             <ThemeToggle />
             <AuthButton />
           </div>
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-foreground mb-2">Buildit - AI Resume Builder</h1>
-            <p className="text-lg text-muted-foreground">Create an ATS-friendly resume with your preferred formatting</p>
-          </div>
         </div>
+      </header>
 
-        <div className="mb-8">
-          <AtsScore result={atsResult} />
-        </div>
-
+      <div className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Column - Editor (tabbed) */}
           <div>
@@ -348,7 +348,7 @@ export default function ResumeBuilder() {
           </div>
 
           {/* Right Column - Preview */}
-          <div className="lg:sticky lg:top-8 lg:h-fit">
+          <div className="lg:sticky lg:top-20 lg:h-fit">
             <ResumePreview resumeData={resumeData} template={template} />
           </div>
         </div>
