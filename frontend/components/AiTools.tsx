@@ -1,6 +1,7 @@
 "use client"
 
 import JobMatch from "@/components/JobMatch"
+import Proofread from "@/components/Proofread"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -109,6 +110,10 @@ export default function AiTools({
           </Button>
           {rewriteError && <div className="text-red-500 text-sm">{rewriteError}</div>}
         </div>
+
+        <div className="border-t border-border" />
+
+        <Proofread resumeData={resumeData} updateResumeData={updateResumeData} />
 
         <div className="border-t border-border" />
 
