@@ -5,6 +5,7 @@ import {
   ArrowUp,
   ClipboardCopy,
   ClipboardPaste,
+  Eye,
   ExternalLink,
   FileDown,
   History,
@@ -30,6 +31,7 @@ interface FloatingToolbarProps {
   onOpenNewTab: () => void
   onOpenHistory: () => void
   onOpenShare: () => void
+  onOpenPreview: () => void
 }
 
 function ToolButton({
@@ -77,6 +79,7 @@ export default function FloatingToolbar({
   onOpenNewTab,
   onOpenHistory,
   onOpenShare,
+  onOpenPreview,
 }: FloatingToolbarProps) {
   const [exporting, setExporting] = useState(false)
   const [showTop, setShowTop] = useState(false)
@@ -99,6 +102,12 @@ export default function FloatingToolbar({
 
   return (
     <div className="fixed bottom-4 right-4 z-40 flex flex-col items-center gap-1 rounded-full border border-border bg-background/95 p-1.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <ToolButton label="Preview resume" onClick={onOpenPreview}>
+        <Eye className="h-4 w-4" />
+      </ToolButton>
+
+      <div className="my-1 h-px w-6 bg-border" />
+
       <ToolButton label="Undo (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
         <Undo2 className="h-4 w-4" />
       </ToolButton>

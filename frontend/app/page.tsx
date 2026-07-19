@@ -17,6 +17,7 @@ import FloatingToolbar from "@/components/FloatingToolbar"
 import VersionHistory from "@/components/VersionHistory"
 import ImportJson from "@/components/ImportJson"
 import ShareDialog from "@/components/ShareDialog"
+import PreviewModal from "@/components/PreviewModal"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { computeAtsScore } from "@/lib/ats"
@@ -58,6 +59,7 @@ export default function ResumeBuilder() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   // In-memory undo/redo stacks.
   const [past, setPast] = useState<ResumeData[]>([])
@@ -347,8 +349,9 @@ export default function ResumeBuilder() {
             </Tabs>
           </div>
 
-          {/* Right Column - Preview */}
-          <div className="lg:sticky lg:top-20 lg:h-fit">
+          {/* Right Column - Preview. Hidden on mobile (an inline PDF can't render
+              there); the toolbar's Preview button opens a modal instead. */}
+          <div className="hidden lg:sticky lg:top-20 lg:block lg:h-fit">
             <ResumePreview resumeData={resumeData} template={template} />
           </div>
         </div>
@@ -368,11 +371,20 @@ export default function ResumeBuilder() {
         onOpenNewTab={handleOpenNewTab}
         onOpenHistory={() => setHistoryOpen(true)}
         onOpenShare={() => setShareOpen(true)}
+        onOpenPreview={() => setPreviewOpen(true)}
       />
 
       <VersionHistory open={historyOpen} onOpenChange={setHistoryOpen} email={email} onRestore={handleRestore} />
       <ImportJson open={importOpen} onOpenChange={setImportOpen} onImport={loadResumeData} />
       <ShareDialog open={shareOpen} onOpenChange={setShareOpen} email={email} />
+      <PreviewModal
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        resumeData={resumeData}
+        template={template}
+        onExportPdf={handleExportPdf}
+        onOpenNewTab={handleOpenNewTab}
+      />
     </div>
   )
 }
