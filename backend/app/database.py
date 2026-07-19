@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import secrets
 from datetime import datetime
 
 from bson import ObjectId
@@ -35,6 +36,9 @@ class Database:
                 raise RuntimeError("MONGODB_URI is not set. Add it to backend/.env.")
             self._client = MongoClient(uri)
             self._resumes = self._client.buildit.resumes
+            # Look up public shared resumes by token. Sparse so the many resumes
+            # without a token don't collide on a null value.
+            self._resumes.create_index("share_token", unique=True, sparse=True)
         return self._resumes
 
     def _convert_objectid(self, data):
@@ -149,6 +153,52 @@ class Database:
         meta = self._version_meta(doc)
         meta["snapshot"] = self._convert_objectid(doc.get("snapshot", {}))
         return meta
+
+    # ------------------------------------------------------------------ #
+    # Public sharing
+    # ------------------------------------------------------------------ #
+
+    # Fields that must never leak on a publicly shared resume.
+    _PRIVATE_KEYS = ("_id", "email", "share_token", "share_enabled", "last_updated")
+
+    def get_share_state(self, email: str):
+        """Return the current sharing state for a user's resume."""
+        doc = self._collection().find_one(
+            {"email": email}, {"share_token": 1, "share_enabled": 1}
+        )
+        if not doc:
+            return {"token": None, "enabled": False}
+        return {"token": doc.get("share_token"), "enabled": bool(doc.get("share_enabled", False))}
+
+    def set_share(self, email: str, enabled: bool = True, regenerate: bool = False):
+        """Enable/disable public sharing for a user's resume. Mints a random
+        token the first time it's enabled (or when regenerate is set, which
+        invalidates any previously shared link). Returns None if no resume."""
+        col = self._collection()
+        doc = col.find_one({"email": email}, {"share_token": 1})
+        if not doc:
+            return None
+        token = doc.get("share_token")
+        if enabled and (regenerate or not token):
+            token = secrets.token_urlsafe(9)
+        update = {"share_enabled": enabled}
+        if token:
+            update["share_token"] = token
+        col.update_one({"email": email}, {"$set": update})
+        return {"token": token, "enabled": enabled}
+
+    def get_shared_resume(self, token: str):
+        """Look up a resume by its public token. Returns None if the token is
+        unknown or sharing is disabled. Strips account-private fields."""
+        if not token:
+            return None
+        doc = self._collection().find_one({"share_token": token, "share_enabled": True})
+        if not doc:
+            return None
+        doc = self._convert_objectid(doc)
+        for key in self._PRIVATE_KEYS:
+            doc.pop(key, None)
+        return doc
 
 
 db = Database()

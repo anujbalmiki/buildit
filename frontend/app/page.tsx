@@ -16,6 +16,7 @@ import TemplateSelector from "@/components/TemplateSelector"
 import FloatingToolbar from "@/components/FloatingToolbar"
 import VersionHistory from "@/components/VersionHistory"
 import ImportJson from "@/components/ImportJson"
+import ShareDialog from "@/components/ShareDialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { computeAtsScore } from "@/lib/ats"
@@ -56,6 +57,7 @@ export default function ResumeBuilder() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
   const [historyOpen, setHistoryOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
 
   // In-memory undo/redo stacks.
   const [past, setPast] = useState<ResumeData[]>([])
@@ -365,10 +367,12 @@ export default function ResumeBuilder() {
         onImportJson={() => setImportOpen(true)}
         onOpenNewTab={handleOpenNewTab}
         onOpenHistory={() => setHistoryOpen(true)}
+        onOpenShare={() => setShareOpen(true)}
       />
 
       <VersionHistory open={historyOpen} onOpenChange={setHistoryOpen} email={email} onRestore={handleRestore} />
       <ImportJson open={importOpen} onOpenChange={setImportOpen} onImport={loadResumeData} />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} email={email} />
     </div>
   )
 }

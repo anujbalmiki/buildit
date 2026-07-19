@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse
 
 from app.api.routes import (ats_check, cover_letter, docx_export,
                             improve_bullet, pdf, proofread, resume,
-                            rewrite_resume, rewrite_section, versions)
+                            rewrite_resume, rewrite_section, share, versions)
 
 load_dotenv()
 
@@ -45,6 +45,7 @@ app.include_router(versions.router, prefix="/api", tags=["versions"])
 app.include_router(improve_bullet.router, prefix="/api", tags=["improve_bullet"])
 app.include_router(docx_export.router, prefix="/api", tags=["docx_export"])
 app.include_router(proofread.router, prefix="/api", tags=["proofread"])
+app.include_router(share.router, prefix="/api", tags=["share"])
 
 
 @app.get("/wake")

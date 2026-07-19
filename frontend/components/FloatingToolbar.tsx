@@ -11,6 +11,7 @@ import {
   Loader2,
   Redo2,
   Save,
+  Share2,
   Undo2,
 } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
@@ -28,6 +29,7 @@ interface FloatingToolbarProps {
   onImportJson: () => void
   onOpenNewTab: () => void
   onOpenHistory: () => void
+  onOpenShare: () => void
 }
 
 function ToolButton({
@@ -74,6 +76,7 @@ export default function FloatingToolbar({
   onImportJson,
   onOpenNewTab,
   onOpenHistory,
+  onOpenShare,
 }: FloatingToolbarProps) {
   const [exporting, setExporting] = useState(false)
   const [showTop, setShowTop] = useState(false)
@@ -127,6 +130,13 @@ export default function FloatingToolbar({
         disabled={!isSignedIn}
       >
         <History className="h-4 w-4" />
+      </ToolButton>
+      <ToolButton
+        label={isSignedIn ? "Share a public link" : "Sign in to share a link"}
+        onClick={onOpenShare}
+        disabled={!isSignedIn}
+      >
+        <Share2 className="h-4 w-4" />
       </ToolButton>
 
       <div className="my-1 h-px w-6 bg-border" />
