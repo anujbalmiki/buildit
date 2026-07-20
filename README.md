@@ -1,162 +1,92 @@
-# Buildit - Resume Builder and Parser
+# Buildit — AI Resume Builder
 
-A modern web application for building and parsing resumes using AI.
+Build an ATS-friendly resume, tailor it to a job description with AI, and export it as PDF or Word.
 
-## Project Structure
+**Frontend:** Next.js + TypeScript + Tailwind (Vercel)
+**Backend:** FastAPI + MongoDB + WeasyPrint (Railway)
+**AI:** Google Gemini, with Groq as a fallback
+
+## Features
+
+- Upload an existing resume (PDF/DOCX) to autofill everything
+- AI rewrite for the whole resume, a single section, or one bullet
+- ATS score with fix-it hints, plus job-description keyword matching
+- Spelling and grammar check
+- Live preview that matches the real PDF, page breaks and all
+- Export to PDF or Word (.docx), in your chosen template
+- Undo/redo and version history, so nothing gets lost
+- Public shareable link (opt-in, can be turned off or reset)
+- Google sign-in with autosave
+
+## Setup
+
+Requires Python 3.11+, Node 18+, and a MongoDB database.
+
+```bash
+git clone <repository-url>
+cd buildit
+
+# Backend
+python -m venv venv
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # macOS/Linux
+pip install -r backend/requirements.txt
+
+# Frontend
+cd frontend && npm install
+```
+
+### Environment variables
+
+`backend/.env`:
+
+```
+GOOGLE_API_KEY=your_gemini_api_key
+MONGODB_URI=your_mongodb_connection_string
+GROQ_API_KEY=optional_fallback_key
+```
+
+`frontend/.env.local` — copy `frontend/.env.example` and fill it in (backend URL, `AUTH_SECRET`, and Google OAuth credentials).
+
+## Running it
+
+```bash
+# Backend  → http://localhost:8000
+cd backend && uvicorn app.main:app --reload
+
+# Frontend → http://localhost:3000
+cd frontend && npm run dev
+```
+
+API docs are at `http://localhost:8000/docs`.
+
+## Notes
+
+- Buildit started as a Streamlit app and was rebuilt on Next.js + FastAPI.
+- If `npm run dev` misbehaves on a OneDrive-synced folder, use `npm run build && npm run start` instead.
+
+## Project structure
 
 ```
 buildit/
 ├── backend/
-│   ├── .env
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── app/
-│       ├── database.py
-│       ├── main.py                  # FastAPI application entry point
-│       ├── pdf.py
-│       ├── resume_parser.py
-│       └── api/
-│           └── routes/
-│               ├── __init__.py
-│               ├── cover_letter.py      # Cover letter endpoints
-│               ├── pdf.py              # PDF generation endpoints
-│               ├── resume.py           # Resume parsing endpoints
-│               ├── rewrite_resume.py   # Resume rewriting endpoints
-│               └── rewrite_section.py  # Section rewriting endpoints
-├── frontend/
-│   ├── .env.local
-│   ├── next.config.mjs
-│   ├── package.json
-│   ├── pnpm-lock.yaml
-│   ├── postcss.config.mjs
-│   ├── tailwind.config.ts
-│   ├── tsconfig.json
 │   ├── app/
-│   │   ├── page.tsx                  # Main application page
-│   │   ├── layout.tsx                # Root layout component
-│   │   └── globals.css               # Global styles
-│   ├── components/
-│   │   ├── ui/                       # Reusable UI components
-│   │   ├── BasicInfoForm.tsx         # Basic info form component
-│   │   ├── FileUpload.tsx            # File upload component
-│   │   ├── FormattingOptions.tsx     # Resume formatting options
-│   │   ├── LoadResume.tsx            # Load saved resume component
-│   │   ├── ResumePreview.tsx         # Live resume preview
-│   │   ├── SaveGenerate.tsx          # Save and generate PDF component
-│   │   └── SectionManager.tsx        # Resume sections manager
-│   ├── hooks/
-│   ├── lib/
-│   │   └── utils.ts
-│   ├── public/
-│   ├── styles/
-│   ├── types/
-│   │   └── resume.ts                 # TypeScript types
-├── legacy-frontend/
-│   ├── app.py
-│   ├── requirements.txt
-│   └── .streamlit/
-│       └── secrets.toml
-├── .gitignore
-├── LICENSE
-└── README.md
+│   │   ├── main.py              # FastAPI app, route registration, homepage
+│   │   ├── llm.py               # Gemini + Groq fallback
+│   │   ├── database.py          # MongoDB: resumes, versions, sharing
+│   │   ├── text_extraction.py   # PDF/DOCX text extraction
+│   │   └── api/routes/          # One file per endpoint group
+│   ├── tests/
+│   ├── Dockerfile
+│   └── requirements.txt
+└── frontend/
+    ├── app/
+    │   ├── page.tsx             # Main editor page
+    │   └── r/[token]/           # Public shared resume page
+    ├── components/              # Editor UI (sections, AI tools, dialogs)
+    │   ├── sections/            # Per section-type editors
+    │   └── ui/                  # shadcn/Radix primitives
+    ├── lib/                     # Templates, export, ATS, sharing helpers
+    ├── types/
+    └── auth.ts                  # Auth.js (Google sign-in)
 ```
-
-## Setup Instructions
-
-1. Clone the repository:
-
-   ```bash
-   git clone <repository-url>
-   cd buildit
-   ```
-2. Set up the backend:
-
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-3. Set up the frontend:
-
-   ```bash
-   cd frontend
-   npm install
-   ```
-4. Create a `.env` file in the backend directory with your API keys:
-
-   ```
-   GOOGLE_API_KEY=your_google_api_key_here
-   MONGODB_URI=your_mongodb_connection_string
-   ```
-5. Create a `.env.local` file in the frontend directory:
-
-   ```
-   NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
-   ```
-6. Run the development servers:
-
-   - Backend:
-     ```bash
-     cd backend
-     uvicorn app.main:app --reload
-     ```
-   - Frontend:
-     ```bash
-     cd frontend
-     npm run dev
-     ```
-
-## Features
-
-- Resume parsing using Google Gemini AI
-  - Supports PDF and DOCX files
-  - Extracts structured information
-  - Auto-fills resume builder
-- Modern Next.js frontend with TypeScript
-  - Real-time resume preview
-  - Drag-and-drop file upload
-  - Customizable formatting options
-- PDF generation with customizable options
-  - Adjustable margins and spacing
-  - Custom page size
-  - Font size and weight controls
-- MongoDB integration for saving resumes
-- RESTful API endpoints
-- CORS support for local development and deployment
-
-## API Documentation
-
-Once the backend server is running, visit:
-
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-## Technologies Used
-
-- Backend:
-
-  - FastAPI
-  - MongoDB
-  - Google Gemini AI
-  - WeasyPrint (PDF generation)
-  - Python-docx2txt
-  - PDFMiner
-- Frontend:
-
-  - Next.js 14
-  - TypeScript
-  - Tailwind CSS
-  - Radix UI Components
-  - React Hooks
-  - Shadcn UI
-
-## Deployment
-
-The application can be deployed using:
-
-- Backend: Railway or any Python-compatible hosting
-- Frontend: Vercel (recommended) or any Next.js-compatible hosting
-- Database: MongoDB Atlas
-
-Make sure to set up the appropriate environment variables in your deployment platform.

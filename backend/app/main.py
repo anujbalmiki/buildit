@@ -54,69 +54,111 @@ async def wake():
     return {"message": "Server is awake!"}
 
 
+ENDPOINT_GROUPS = [
+    ("Resume", [
+        ("POST", "/api/parse-resume", "Parse an uploaded PDF/DOCX into structured resume data"),
+        ("GET", "/api/resume/{email}", "Fetch a saved resume"),
+        ("POST", "/api/resume/{email}", "Save a resume"),
+    ]),
+    ("AI", [
+        ("POST", "/api/rewrite-resume-ai", "Rewrite the whole resume for a job description"),
+        ("POST", "/api/rewrite-section-ai", "Rewrite a single section"),
+        ("POST", "/api/improve-bullet", "Improve one bullet point"),
+        ("POST", "/api/generate-cover-letter-ai", "Draft a cover letter"),
+        ("POST", "/api/proofread", "Find spelling and grammar issues"),
+        ("POST", "/api/ats-check", "Score the generated PDF for ATS readability"),
+    ]),
+    ("Export", [
+        ("POST", "/api/generate-pdf", "Render the resume HTML to PDF"),
+        ("POST", "/api/generate-docx", "Export the resume as a Word document"),
+    ]),
+    ("Version history", [
+        ("GET", "/api/resume/{email}/versions", "List saved versions"),
+        ("POST", "/api/resume/{email}/versions", "Store a version snapshot"),
+        ("GET", "/api/resume/{email}/versions/{id}", "Fetch one version"),
+    ]),
+    ("Sharing", [
+        ("GET", "/api/resume/{email}/share", "Current sharing state"),
+        ("POST", "/api/resume/{email}/share", "Enable the public link"),
+        ("POST", "/api/resume/{email}/share/disable", "Turn the public link off"),
+        ("POST", "/api/resume/{email}/share/regenerate", "Mint a new link, killing the old one"),
+        ("GET", "/api/r/{token}", "Public, read-only shared resume"),
+    ]),
+]
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Return a simple HTML page showing the API is running"""
+    groups = "".join(
+        "<h2>{}</h2><table>{}</table>".format(
+            name,
+            "".join(
+                '<tr><td class="m">{}</td><td class="p">{}</td><td class="d">{}</td></tr>'.format(
+                    method, path, desc
+                )
+                for method, path, desc in routes
+            ),
+        )
+        for name, routes in ENDPOINT_GROUPS
+    )
+
     return """
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Buildit Backend Server</title>
+        <title>Buildit API</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
+            :root { color-scheme: light dark; }
             body {
-                font-family: Arial, sans-serif;
-                max-width: 800px;
+                font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+                max-width: 820px;
                 margin: 0 auto;
-                padding: 20px;
+                padding: 32px 20px 64px;
                 line-height: 1.6;
             }
-            h1 {
-                color: #2c3e50;
-                border-bottom: 1px solid #eee;
-                padding-bottom: 10px;
+            h1 { margin-bottom: 4px; }
+            h2 {
+                font-size: 15px;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                opacity: .6;
+                margin: 28px 0 8px;
             }
-            .card {
-                background: #f9f9f9;
-                border-radius: 5px;
-                padding: 15px;
-                margin: 15px 0;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .success {
-                color: #27ae60;
-                font-weight: bold;
-            }
-            .endpoints {
-                background: #e8f4fc;
-            }
-            a {
-                color: #3498db;
+            .status { color: #16a34a; font-weight: 600; }
+            .sub { opacity: .6; font-size: 14px; margin-top: 0; }
+            .links { margin: 20px 0 8px; }
+            .links a {
+                display: inline-block;
+                margin-right: 14px;
+                color: #2563eb;
                 text-decoration: none;
             }
-            a:hover {
-                text-decoration: underline;
+            .links a:hover { text-decoration: underline; }
+            table { width: 100%; border-collapse: collapse; }
+            td { padding: 6px 8px; border-top: 1px solid rgba(128,128,128,.25); vertical-align: top; }
+            .m { font-family: ui-monospace, monospace; font-size: 12px; opacity: .7; width: 52px; }
+            .p { font-family: ui-monospace, monospace; font-size: 13px; white-space: nowrap; }
+            .d { opacity: .7; font-size: 14px; }
+            @media (max-width: 640px) {
+                .p { white-space: normal; }
+                .d { display: none; }
             }
         </style>
     </head>
     <body>
-        <h1>Buildit Backend Server</h1>
-        <div class="card">
-            <p class="success">API is running successfully!</p>
-            <p>Server Time: """ + time.strftime("%Y-%m-%d %H:%M:%S") + """</p>
-        </div>
+        <h1>Buildit API</h1>
+        <p class="sub">Backend for the Buildit resume builder.</p>
+        <p><span class="status">Running</span> &middot; """ + time.strftime("%Y-%m-%d %H:%M:%S") + """</p>
 
-        <div class="card endpoints">
-            <h2>Available Endpoints:</h2>
-            <ul>
-                <li><a href="/docs">/docs</a> - Interactive API documentation</li>
-                <li><a href="/redoc">/redoc</a> - Alternative API documentation</li>
-                <li><a href="/health">/health</a> - API health check</li>
-                <li><a href="/info">/info</a> - API information</li>
-                <li>/api/generate-pdf - Generate PDF from HTML</li>
-                <li>/api/parse-resume - Parse resume using AI</li>
-                <li>/api/rewrite-resume-ai - Rewrite resume to match a job description</li>
-            </ul>
+        <div class="links">
+            <a href="/docs">API docs</a>
+            <a href="/redoc">ReDoc</a>
+            <a href="/health">Health</a>
+            <a href="/info">Info</a>
         </div>
+        """ + groups + """
     </body>
     </html>
     """
